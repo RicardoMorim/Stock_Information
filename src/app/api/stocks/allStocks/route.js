@@ -6,13 +6,11 @@ export async function GET(req) {
 	await connectToDatabase();
 
 	try {
-		
 		const stocks = await Stock.find({});
 		return NextResponse.json({
 			success: true,
 			data: stocks,
 		});
-
 	} catch (error) {
 		console.error('Error fetching stocks:', error);
 		return NextResponse.json({
