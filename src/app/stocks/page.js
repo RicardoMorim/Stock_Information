@@ -43,7 +43,7 @@ export default function Stocks() {
 					vwap: stock.vwap,
 					timestamp: new Date(stock.timestamp),
 					historicalData: stock.historicalData,
-					exchangeShortName: stock.exchangeShortName, // Include exchangeShortName
+					exchangeShortName: stock.exchangeShortName, 
 				}));
 
 				const processedCryptos = (data.data.cryptocurrencies || []).map((crypto) => ({
@@ -58,7 +58,7 @@ export default function Stocks() {
 					vwap: crypto.vwap,
 					timestamp: new Date(crypto.timestamp),
 					historicalData: crypto.historicalData,
-					exchangeShortName: crypto.exchangeShortName, // Include exchangeShortName
+					exchangeShortName: crypto.exchangeShortName, 
 				}));
 
 				const processedETFs = (data.data.etfs || []).map((etf) => ({
