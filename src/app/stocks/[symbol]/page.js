@@ -28,6 +28,33 @@ ChartJS.register(
 	TimeScale
 );
 
+const getCachedData = (symbol, type) => {
+	try {
+		const data = localStorage.getItem(`stock_${symbol}_${type}`);
+		if (!data) return null;
+		const { value, timestamp } = JSON.parse(data);
+		if (Date.now() - timestamp > 24 * 60 * 60 * 1000 * 2) {
+			localStorage.removeItem(`stock_${symbol}_${type}`);
+			return null;
+		}
+		return value;
+	} catch (error) {
+		console.error('Cache read error:', error);
+		return null;
+	}
+};
+
+const setCachedData = (symbol, type, data) => {
+	try {
+		localStorage.setItem(`stock_${symbol}_${type}`, JSON.stringify({
+			value: data,
+			timestamp: Date.now()
+		}));
+	} catch (error) {
+		console.error('Cache write error:', error);
+	}
+};
+
 export default function StockDetails() {
 	// Use useParams to get the dynamic route parameter
 	const params = useParams();
@@ -45,39 +72,6 @@ export default function StockDetails() {
 
 
 	const router = useRouter();
-
-	const getCachedData = (symbol, type) => {
-		try {
-			const data = localStorage.getItem(`${CACHE_KEY_PREFIX}${symbol}_${type}`);
-			if (!data) return null;
-
-			const { value, timestamp } = JSON.parse(data);
-
-			// Check if cache is still valid
-			if (Date.now() - timestamp > CACHE_DURATION) {
-				localStorage.removeItem(`${CACHE_KEY_PREFIX}${symbol}_${type}`);
-				return null;
-			}
-
-			return value;
-		} catch (error) {
-			console.error('Cache read error:', error);
-			return null;
-		}
-	};
-
-
-	const setCachedData = (symbol, type, data) => {
-		try {
-			const cacheData = {
-				value: data,
-				timestamp: Date.now()
-			};
-			localStorage.setItem(`${CACHE_KEY_PREFIX}${symbol}_${type}`, JSON.stringify(cacheData));
-		} catch (error) {
-			console.error('Cache write error:', error);
-		}
-	};
 
 
 	useEffect(() => {
@@ -135,7 +129,7 @@ export default function StockDetails() {
 		};
 
 		fetchStockDetails();
-	}, [symbol, router, getCachedData, setCachedData]);
+	}, [symbol, router]);
 
 	if (isLoading) {
 		return <div>Loading...</div>;
@@ -282,11 +276,11 @@ export default function StockDetails() {
 									{/* Image Section */}
 									{article.images?.length > 0 && (
 										<div className="hidden sm:block flex-shrink-0">
-											<Image
-												src={article.images.find(img => img.size === "thumb")?.url || article.images[0].url}
+											<Image src={article.images.find(img => img.size === "thumb")?.url || article.images[0].url}
 												alt=""
-												className="w-32 h-24 object-cover rounded-lg"
-												onError={(e) => e.target.style.display = 'none'}
+												width={128}
+												height={96}
+												className="w-32 h-24 object-cover rounded-lg" onError={(e) => e.target.style.display = 'none'}
 											/>
 										</div>
 									)}
