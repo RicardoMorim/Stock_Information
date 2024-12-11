@@ -17,7 +17,7 @@ export default function Login() {
     if (token) {
       router.push("/stocks");
     }
-  }, []);
+  }, [router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

@@ -14,6 +14,7 @@ import {
 	Legend,
 	TimeScale,
 } from 'chart.js';
+import Image from "next/image";
 
 // Register Chart.js components
 ChartJS.register(
@@ -134,7 +135,7 @@ export default function StockDetails() {
 		};
 
 		fetchStockDetails();
-	}, [symbol, router]);
+	}, [symbol, router, getCachedData, setCachedData]);
 
 	if (isLoading) {
 		return <div>Loading...</div>;
@@ -259,7 +260,7 @@ export default function StockDetails() {
 						{dividends ? (
 							<ul>
 								<li>
-									<strong>Last Year's Dividend Amount:</strong> ${dividends.annualDividendAmount?.toFixed(2) || '0.00'}
+									<strong>Last Year&apos;s Dividend Amount:</strong> ${dividends.annualDividendAmount?.toFixed(2) || '0.00'}
 								</li>
 								<li>
 									<strong>Dividend Yield:</strong> {dividends.dividendYield?.toFixed(2) || '0.00'}%
@@ -281,7 +282,7 @@ export default function StockDetails() {
 									{/* Image Section */}
 									{article.images?.length > 0 && (
 										<div className="hidden sm:block flex-shrink-0">
-											<img
+											<Image
 												src={article.images.find(img => img.size === "thumb")?.url || article.images[0].url}
 												alt=""
 												className="w-32 h-24 object-cover rounded-lg"

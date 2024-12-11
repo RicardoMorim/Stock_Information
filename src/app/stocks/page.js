@@ -154,8 +154,9 @@ export default function Stocks() {
 			setSearchResults(results);
 			setIsSearching(false);
 		}, 200),
-		[fuse]
+		[debounce, setSearchQuery, setSearchResults, setIsSearching, fuse]
 	);
+
 
 	const displayedAssets = searchQuery ? searchResults : assets; // Display all assets when there is no search query
 
