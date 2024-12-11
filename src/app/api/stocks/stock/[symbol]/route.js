@@ -168,6 +168,39 @@ export async function GET(req, { params }) {
 		};
 
 
+		// In route.js, modify fetchFundamentalMetrics:
+		const fetchFundamentalMetrics = async (symbol) => {
+			try {
+				const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=10&apiKey=${POLYGON_API_KEY}`;
+				const response = await fetch(url);
+				if (!response.ok) throw new Error(`Failed to fetch fundamentals: ${response.statusText}`);
+				const data = await response.json();
+
+				return data.results?.map(result => ({
+					// Meta Info
+					period: {
+						fiscalYear: result.fiscal_year,
+						fiscalPeriod: result.fiscal_period,
+						startDate: result.start_date,
+						endDate: result.end_date,
+						filingDate: result.filing_date,
+						sourceUrl: result.source_filing_url
+					},
+					// Statements
+					income: result.financials.income_statement,
+					cashFlow: result.financials.cash_flow_statement,
+					balance: result.financials.balance_sheet,
+					comprehensive: result.financials.comprehensive_income,
+					companyInfo: {
+						name: result.company_name,
+						tickers: result.tickers
+					}
+				})) || [];
+			} catch (error) {
+				console.error('Error fetching fundamentals:', error);
+				return [];
+			}
+		};
 
 		const fetchNews = async (symbol) => {
 			try {
@@ -198,6 +231,8 @@ export async function GET(req, { params }) {
 		const historicalData = await fetchHistoricalData(symbol, isCrypto);
 		const assetDetails = await fetchAssetDetails(symbol);
 		const newsData = await fetchNews(symbol);
+		const fundamentals = await fetchFundamentalMetrics(symbol);
+
 
 
 		const snapshotData = isCrypto
@@ -236,6 +271,7 @@ export async function GET(req, { params }) {
 				dividendYield: dividendYieldData.dividendYield
 			} : null,
 			news: newsData,
+			fundamentals
 		};
 
 
