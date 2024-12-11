@@ -115,6 +115,7 @@ export async function GET(req) {
 					const assetDetails = await fetchAssetDetails(symbol);
 					const historicalData = await fetchHistoricalData(symbol, isCrypto);
 
+
 					return {
 						symbol,
 						name: assetDetails.name || null,
