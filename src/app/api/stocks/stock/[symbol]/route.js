@@ -5,13 +5,15 @@ import Stock from '@/app/models/Stock';
 const POLYGON_API_KEY = process.env.POLYGON_KEY;
 const ALPACA_API_KEY = process.env.ALPACA_KEY;
 const ALPACA_SECRET_KEY = process.env.ALPACA_SECRET_KEY;
+const YH_KEY = process.env.YH_KEY;
 
 export async function GET(req, { params }) {
 	try {
 		await connectToDatabase();
 
 		// Extract the symbol from the request parameters
-		const { symbol } = await params;
+		const uncodedSymbol = await params;
+		const symbol = decodeURIComponent(uncodedSymbol.symbol);
 
 		if (!symbol) {
 			return NextResponse.json(
@@ -20,7 +22,60 @@ export async function GET(req, { params }) {
 			);
 		}
 
-		// Fetch data from Alpaca API
+
+		// Add new function for Yahoo Finance API
+		const fetchYahooData = async (symbol) => {
+			try {
+				const response = await fetch(
+					`https://yfapi.net/v6/finance/quote?region=US&lang=en&symbols=${symbol}`,
+					{
+						headers: {
+							'accept': 'application/json',
+							'X-API-KEY': YH_KEY
+						}
+					}
+				);
+
+				if (!response.ok) {
+					throw new Error(`Yahoo API Error: ${response.status} ${response.statusText}`);
+				}
+
+				const data = await response.json();
+				const quote = data.quoteResponse;
+				const result = quote.result?.[0];
+
+				console.log("Yahoo:" + symbol + " " + data)
+				console.log("Yahoo:" + symbol + " " + result)
+				console.log(result.regularMarketPrice)
+
+				if (!result) {
+					return null;
+				}
+
+				// Map Yahoo data to match Alpaca format
+				return {
+					[symbol]: {
+						latestTrade: {
+							p: result.regularMarketPrice
+						},
+						dailyBar: {
+							c: result.regularMarketPrice,
+							h: result.regularMarketDayHigh,
+							l: result.regularMarketDayLow,
+							v: result.regularMarketVolume,
+							vw: result.regularMarketPrice // VWAP not available in Yahoo
+						},
+						prevDailyBar: {
+							c: result.regularMarketPreviousClose
+						}
+					}
+				};
+			} catch (error) {
+				console.error('Error fetching Yahoo data:', error);
+				return null;
+			}
+		};
+
 		const fetchSnapshot = async (symbol, isCrypto = false) => {
 			let baseUrl;
 			if (isCrypto) {
@@ -32,46 +87,83 @@ export async function GET(req, { params }) {
 
 			const url = `${baseUrl}?symbols=${symbol}`;
 
-			const response = await fetch(url, {
-				headers: {
-					'APCA-API-KEY-ID': ALPACA_API_KEY,
-					'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-				},
-			});
+			try {
+				// Try Alpaca first
+				const response = await fetch(url, {
+					headers: {
+						'APCA-API-KEY-ID': ALPACA_API_KEY,
+						'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+					},
+				});
 
-			if (!response.ok) {
-				throw new Error(`API Error: ${response.status} ${response.statusText}`);
+				if (!response.ok) {
+					throw new Error(`API Error: ${response.status} ${response.statusText}`);
+				}
+
+				const data = await response.json();
+
+				// If symbol not found in Alpaca, try Yahoo
+				if (!data[symbol]) {
+					console.log(`Symbol ${symbol} not found in Alpaca, trying Yahoo Finance...`);
+					const yahooData = await fetchYahooData(symbol);
+					if (yahooData) {
+						console.log(`Found ${symbol} in Yahoo Finance`);
+						return yahooData;
+					}
+				}
+
+				// If symbol has dot and not found, try without dot
+				if (symbol.includes('.') && !data[symbol]) {
+					const hyphenSymbol = symbol.replace('.', '');
+					return fetchSnapshot(hyphenSymbol, isCrypto);
+				}
+
+				return data;
+			} catch (error) {
+				// If Alpaca fails, try Yahoo
+				console.log(`Alpaca API failed for ${symbol}, trying Yahoo Finance...`);
+				const yahooData = await fetchYahooData(symbol);
+				if (yahooData) {
+					console.log(`Found ${symbol} in Yahoo Finance`);
+					return yahooData;
+				}
+				throw error;
 			}
-
-			return response.json();
 		};
-
 		const fetchHistoricalData = async (symbol, isCrypto = false) => {
-			let baseUrl;
-			if (isCrypto) {
-				baseUrl = 'https://data.alpaca.markets/v1beta3/crypto/us/bars';
-			} else {
-				baseUrl = 'https://data.alpaca.markets/v2/stocks/bars';
+			try {
+				let baseUrl;
+				if (isCrypto) {
+					baseUrl = 'https://data.alpaca.markets/v1beta3/crypto/us/bars';
+				} else {
+					baseUrl = 'https://data.alpaca.markets/v2/stocks/bars';
+				}
+
+				const url = `${baseUrl}?symbols=${symbol}&timeframe=1Day&start=${new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString()}`;
+
+				const response = await fetch(url, {
+					headers: {
+						'APCA-API-KEY-ID': ALPACA_API_KEY,
+						'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+					},
+				});
+
+				if (!response.ok) {
+					return { error: `API Error: ${response.status} ${response.statusText}`, data: [] };
+				}
+
+				const data = await response.json();
+
+				if (symbol.includes('.') && !data.bars[symbol]) {
+					const hyphenSymbol = symbol.replace('.', '');
+					return fetchHistoricalData(hyphenSymbol, isCrypto);
+				}
+
+				return { data: data.bars[symbol] || [], error: null };
+			} catch (error) {
+				console.error('Error fetching historical data:', error);
+				return { error: error.message, data: [] };
 			}
-
-			const url = `${baseUrl}?symbols=${symbol}&timeframe=1Day&start=${new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString()}`;
-
-			const response = await fetch(url, {
-				headers: {
-					'APCA-API-KEY-ID': ALPACA_API_KEY,
-					'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-				},
-			});
-
-			if (!response.ok) {
-				throw new Error(`API Error: ${response.status} ${response.statusText}`);
-			}
-
-			const data = await response.json();
-
-			console.log("Details: " + data)
-
-			return data.bars[symbol] || [];
 		};
 
 		const fetchAssetDetails = async (symbol) => {
@@ -85,7 +177,7 @@ export async function GET(req, { params }) {
 			}
 
 			if (!dbAsset && symbol.includes('.')) {
-				const hyphenSymbol = symbol.replace('.', '-');
+				const hyphenSymbol = symbol.replace('.', '');
 				dbAsset = await Stock.findOne({ symbol: hyphenSymbol }).exec();
 				if (dbAsset) {
 					return {
@@ -119,6 +211,11 @@ export async function GET(req, { params }) {
 				}
 				const dividendData = await dividendResponse.json();
 
+				if (symbol.includes('.') && !dividendData.results) {
+					const hyphenSymbol = symbol.replace('.', '');
+					return fetchDividendYield(hyphenSymbol, currentPrice);
+				}
+
 				const annualDividendAmountLastYear = dividendData.results.reduce((acc, dividend) => {
 					const dividendYear = new Date(dividend.declaration_date).getFullYear();
 					return dividendYear === lastYear ? acc + dividend.cash_amount : acc;
@@ -134,6 +231,11 @@ export async function GET(req, { params }) {
 						throw new Error(`Failed to fetch dividend data for this year: ${dividendResponseThisYear.statusText}`);
 					}
 					const dividendDataThisYear = await dividendResponseThisYear.json();
+
+					if (symbol.includes('.') && !dividendDataThisYear.results) {
+						const hyphenSymbol = symbol.replace('.', '');
+						return fetchDividendYield(hyphenSymbol, currentPrice);
+					}
 
 					annualDividendAmount = dividendDataThisYear.results.reduce((acc, dividend) => {
 						const dividendDate = new Date(dividend.declaration_date);
@@ -163,9 +265,13 @@ export async function GET(req, { params }) {
 				};
 			} catch (error) {
 				console.error('Error fetching dividend yield:', error);
-				return null;
+				return {
+					error: error.message,
+					data: null
+				};
 			}
-		};
+		}
+
 
 
 		// In route.js, modify fetchFundamentalMetrics:
@@ -175,6 +281,15 @@ export async function GET(req, { params }) {
 				const response = await fetch(url);
 				if (!response.ok) throw new Error(`Failed to fetch fundamentals: ${response.statusText}`);
 				const data = await response.json();
+
+
+				if (symbol.includes('.') && data.results.length === 0) {
+					return fetchFundamentalMetrics(symbol.replace('.', ''));
+				}
+
+				if (!data.results) {
+					throw new Error('No fundamental data found');
+				}
 
 				return data.results?.map(result => ({
 					// Meta Info
@@ -217,6 +332,10 @@ export async function GET(req, { params }) {
 					throw new Error(`Failed to fetch news: ${response.statusText}`);
 				}
 
+				if (symbol.includes('.') && !response.news) {
+					return fetchNews(symbol.replace('.', ''));
+				}
+
 				const newsData = await response.json();
 				return newsData.news;
 			} catch (error) {
@@ -228,20 +347,30 @@ export async function GET(req, { params }) {
 		// Determine if the symbol is for a stock or crypto
 		const isCrypto = symbol.includes('/');
 		const snapshot = await fetchSnapshot(symbol, isCrypto);
-		const historicalData = await fetchHistoricalData(symbol, isCrypto);
+		const historicalDataResult = await fetchHistoricalData(symbol, isCrypto);
 		const assetDetails = await fetchAssetDetails(symbol);
 		const newsData = await fetchNews(symbol);
 		const fundamentals = await fetchFundamentalMetrics(symbol);
+		console.log("Fundamentals: " + fundamentals);
+		console.log("NewsData: " + newsData);
+		console.log("AssetDetails: " + assetDetails);
+		console.log("HistoricalDataResult: " + historicalDataResult);
+		console.log("Snapshot: " + snapshot);
 
 
 
-		const snapshotData = isCrypto
+		var snapshotData = isCrypto
 			? snapshot.snapshots[symbol.replace('/', '%2F')]
 			: snapshot[symbol];
+
+		if (!snapshotData && symbol.includes('.'))
+			snapshotData = snapshot[symbol.replace('.', '')];
+
 
 		const currentPrice = snapshotData?.latestTrade?.p;
 		const dividendYieldData = await fetchDividendYield(symbol, currentPrice);
 
+		console.log("DividendYieldData: " + dividendYieldData);
 
 		if (!snapshotData) {
 			return NextResponse.json(
@@ -250,7 +379,7 @@ export async function GET(req, { params }) {
 			);
 		}
 
-		// Prepare response
+
 		const responseData = {
 			symbol,
 			name: assetDetails.name,
@@ -264,12 +393,14 @@ export async function GET(req, { params }) {
 			low: snapshotData.dailyBar.l,
 			volume: snapshotData.dailyBar.v,
 			vwap: snapshotData.dailyBar.vw,
-			historicalData,
-			dividends: dividendYieldData ? {
-				annualDividendAmount: dividendYieldData.annualDividendAmount,
-				currentPrice: dividendYieldData.currentPrice,
-				dividendYield: dividendYieldData.dividendYield
-			} : null,
+			historicalData: {
+				data: historicalDataResult.data,
+				error: historicalDataResult.error
+			},
+			dividends: {
+				data: dividendYieldData?.data || null,
+				error: dividendYieldData?.error || null
+			},
 			news: newsData,
 			fundamentals
 		};

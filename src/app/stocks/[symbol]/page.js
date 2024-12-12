@@ -67,10 +67,6 @@ export default function StockDetails() {
 	const [showFiling, setShowFiling] = useState(false);
 	const [filingDetails, setFilingDetails] = useState(null);
 
-	const CACHE_KEY_PREFIX = 'stock_';
-	const CACHE_DURATION = 24 * 60 * 60 * 1000 * 2; // 2 days 
-
-
 	const router = useRouter();
 
 
@@ -107,7 +103,8 @@ export default function StockDetails() {
 				}
 
 				// Fetch fresh data if no cache or cache expired
-				const response = await fetch(`/api/stocks/stock/${symbol}`);
+				const encodedSymbol = encodeURIComponent(symbol);
+				const response = await fetch(`/api/stocks/stock/${encodedSymbol}`);
 				if (!response.ok) throw new Error("Failed to fetch stock data");
 
 				const data = await response.json();
@@ -178,14 +175,13 @@ export default function StockDetails() {
 	};
 
 
-
 	// Chart data
 	const chartData = {
-		labels: historicalData.map((data) => new Date(data.t)), // Change from data.date to data.t
+		labels: historicalData?.data?.map((data) => new Date(data.t)) || [],
 		datasets: [
 			{
 				label: `${symbol} Price`,
-				data: historicalData.map((data) => data.c), // Change from data.close to data.c
+				data: historicalData?.data?.map((data) => data.c) || [],
 				borderColor: "rgba(75, 192, 192, 1)",
 				backgroundColor: "rgba(75, 192, 192, 0.2)",
 				fill: true,
@@ -226,44 +222,24 @@ export default function StockDetails() {
 			<h1 className="text-3xl font-bold">{symbol} Stock Details</h1>
 
 			<div className="mt-6">
-				{/* Stock Price Chart */}
+				{/* Stock Price & Metrics Chart */}
 				<div className="bg-white rounded-lg p-4 shadow-lg">
-					<h2 className="text-xl font-semibold text-black">Stock Price Chart</h2>
-					<div style={{ height: "400px" }}>
-						<Line data={chartData} options={chartOptions} />
-					</div>
-				</div>
-
-				{/* Stock Metrics */}
-				<div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-black">
-					<div className="bg-white rounded-lg p-4 shadow-lg">
-						<h3 className="text-lg font-semibold e">Stock Metrics</h3>
-						<ul>
-							<li><strong>Current Price:</strong> ${price}</li>
-							<li><strong>Change Percent:</strong> {changePercent.toFixed(2)}%</li>
-							<li><strong>High:</strong> ${high}</li>
-							<li><strong>Low:</strong> ${low}</li>
-							<li><strong>Volume:</strong> {volume}</li>
-							<li><strong>VWAP:</strong> ${vwap}</li>
-						</ul>
-					</div>
-
-					{/* Dividends */}
-					<div className="bg-white rounded-lg p-4 shadow-lg text-black">
-						<h3 className="text-lg font-semibold">Dividends</h3>
-						{dividends ? (
-							<ul>
-								<li>
-									<strong>Last Year&apos;s Dividend Amount:</strong> ${dividends.annualDividendAmount?.toFixed(2) || '0.00'}
-								</li>
-								<li>
-									<strong>Dividend Yield:</strong> {dividends.dividendYield?.toFixed(2) || '0.00'}%
-								</li>
-							</ul>
-						) : (
-							<p>No dividend data available.</p>
-						)}
-					</div>
+					<h2 className="text-xl font-semibold text-black">Price & Metrics History</h2>
+					{historicalData.error ? (
+						<div className="h-[400px] flex items-center justify-center">
+							<p className="text-amber-600">
+								<span className="font-medium">Note:</span> Historical data temporarily unavailable: {historicalData.error}
+							</p>
+						</div>
+					) : historicalData.data?.length > 0 ? (
+						<div style={{ height: "400px" }}>
+							<Line data={chartData} options={chartOptions} />
+						</div>
+					) : (
+						<div className="h-[400px] flex items-center justify-center">
+							<p>No historical data available for this stock.</p>
+						</div>
+					)}
 				</div>
 
 				{/* News */}
@@ -688,35 +664,35 @@ export default function StockDetails() {
 					<div style={{ height: "400px" }}>
 						<Line
 							data={{
-								labels: historicalData.map(data => new Date(data.t)),
+								labels: historicalData?.data?.map(data => new Date(data.t)),
 								datasets: [
 									{
 										label: 'Open',
-										data: historicalData.map(data => data.o),
+										data: historicalData?.data?.map(data => data.o),
 										borderColor: 'rgb(75, 192, 192)',
 										tension: 0.1
 									},
 									{
 										label: 'High',
-										data: historicalData.map(data => data.h),
+										data: historicalData?.data?.map(data => data.h),
 										borderColor: 'rgb(54, 162, 235)',
 										tension: 0.1
 									},
 									{
 										label: 'Low',
-										data: historicalData.map(data => data.l),
+										data: historicalData?.data?.map(data => data.l),
 										borderColor: 'rgb(255, 99, 132)',
 										tension: 0.1
 									},
 									{
 										label: 'Close',
-										data: historicalData.map(data => data.c),
+										data: historicalData?.data?.map(data => data.c),
 										borderColor: 'rgb(153, 102, 255)',
 										tension: 0.1
 									},
 									{
 										label: 'Volume',
-										data: historicalData.map(data => data.v),
+										data: historicalData?.data?.map(data => data.v),
 										borderColor: 'rgb(255, 159, 64)',
 										tension: 0.1,
 										yAxisID: 'volume'
