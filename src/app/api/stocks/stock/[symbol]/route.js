@@ -37,22 +37,17 @@ export async function GET(req, { params }) {
 				);
 
 				if (!response.ok) {
-					throw new Error(`Yahoo API Error: ${response.status} ${response.statusText}`);
+					throw new Error(`Yahoo API Error: ${response.status}`);
 				}
 
 				const data = await response.json();
-				const quote = data.quoteResponse;
-				const result = quote.result?.[0];
-
-				console.log("Yahoo:" + symbol + " " + data)
-				console.log("Yahoo:" + symbol + " " + result)
-				console.log(result.regularMarketPrice)
+				const result = data.quoteResponse?.result?.[0];
 
 				if (!result) {
 					return null;
 				}
 
-				// Map Yahoo data to match Alpaca format
+				// Return data in consistent format matching Alpaca
 				return {
 					[symbol]: {
 						latestTrade: {
@@ -63,7 +58,7 @@ export async function GET(req, { params }) {
 							h: result.regularMarketDayHigh,
 							l: result.regularMarketDayLow,
 							v: result.regularMarketVolume,
-							vw: result.regularMarketPrice // VWAP not available in Yahoo
+							vw: result.regularMarketPrice // VWAP not available
 						},
 						prevDailyBar: {
 							c: result.regularMarketPreviousClose
@@ -71,65 +66,63 @@ export async function GET(req, { params }) {
 					}
 				};
 			} catch (error) {
-				console.error('Error fetching Yahoo data:', error);
+				console.error('Yahoo API Error:', error);
 				return null;
 			}
 		};
 
 		const fetchSnapshot = async (symbol, isCrypto = false) => {
-			let baseUrl;
-			if (isCrypto) {
-				baseUrl = 'https://data.alpaca.markets/v1beta3/crypto/us/snapshots';
-				symbol = symbol.replace('/', '%2F');
-			} else {
-				baseUrl = 'https://data.alpaca.markets/v2/stocks/snapshots';
-			}
-
-			const url = `${baseUrl}?symbols=${symbol}`;
-
 			try {
 				// Try Alpaca first
-				const response = await fetch(url, {
-					headers: {
-						'APCA-API-KEY-ID': ALPACA_API_KEY,
-						'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-					},
-				});
+				let snapshotData = null;
 
-				if (!response.ok) {
-					throw new Error(`API Error: ${response.status} ${response.statusText}`);
-				}
+				if (!isCrypto) {
+					const alpacaResponse = await fetch(
+						`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbol}`,
+						{
+							headers: {
+								'APCA-API-KEY-ID': ALPACA_API_KEY,
+								'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+							},
+						}
+					);
 
-				const data = await response.json();
-
-				// If symbol not found in Alpaca, try Yahoo
-				if (!data[symbol]) {
-					console.log(`Symbol ${symbol} not found in Alpaca, trying Yahoo Finance...`);
-					const yahooData = await fetchYahooData(symbol);
-					if (yahooData) {
-						console.log(`Found ${symbol} in Yahoo Finance`);
-						return yahooData;
+					if (alpacaResponse.ok) {
+						const alpacaData = await alpacaResponse.json();
+						snapshotData = alpacaData[symbol];
 					}
 				}
 
-				// If symbol has dot and not found, try without dot
-				if (symbol.includes('.') && !data[symbol]) {
-					const hyphenSymbol = symbol.replace('.', '');
-					return fetchSnapshot(hyphenSymbol, isCrypto);
+				// If no Alpaca data, try Yahoo
+				if (!snapshotData) {
+					console.log(`Trying Yahoo Finance for ${symbol}...`);
+					const yahooData = await fetchYahooData(symbol);
+					if (yahooData && yahooData[symbol]) {
+						console.log(`Found ${symbol} in Yahoo:`, yahooData[symbol]);
+						// Fix: Extract the data directly instead of nesting it again
+						snapshotData = yahooData[symbol];
+					}
 				}
 
-				return data;
-			} catch (error) {
-				// If Alpaca fails, try Yahoo
-				console.log(`Alpaca API failed for ${symbol}, trying Yahoo Finance...`);
-				const yahooData = await fetchYahooData(symbol);
-				if (yahooData) {
-					console.log(`Found ${symbol} in Yahoo Finance`);
-					return yahooData;
+				// If still no data and symbol has dot, try without dot
+				if (!snapshotData && symbol.includes('.')) {
+					const symbolWithoutDot = symbol.replace('.', '');
+					return fetchSnapshot(symbolWithoutDot, isCrypto);
 				}
-				throw error;
+
+				if (!snapshotData) {
+					console.log(`No data found for ${symbol} in either API`);
+					return null;
+				}
+
+				// Return the data directly without additional nesting
+				return snapshotData;
+			} catch (error) {
+				console.error('Snapshot fetch error:', error);
+				return null;
 			}
 		};
+
 		const fetchHistoricalData = async (symbol, isCrypto = false) => {
 			try {
 				let baseUrl;
@@ -272,9 +265,6 @@ export async function GET(req, { params }) {
 			}
 		}
 
-
-
-		// In route.js, modify fetchFundamentalMetrics:
 		const fetchFundamentalMetrics = async (symbol) => {
 			try {
 				const url = `https://api.polygon.io/vX/reference/financials?ticker=${symbol}&limit=10&apiKey=${POLYGON_API_KEY}`;
@@ -347,71 +337,75 @@ export async function GET(req, { params }) {
 		// Determine if the symbol is for a stock or crypto
 		const isCrypto = symbol.includes('/');
 		const snapshot = await fetchSnapshot(symbol, isCrypto);
-		const historicalDataResult = await fetchHistoricalData(symbol, isCrypto);
-		const assetDetails = await fetchAssetDetails(symbol);
-		const newsData = await fetchNews(symbol);
-		const fundamentals = await fetchFundamentalMetrics(symbol);
-		console.log("Fundamentals: " + fundamentals);
-		console.log("NewsData: " + newsData);
-		console.log("AssetDetails: " + assetDetails);
-		console.log("HistoricalDataResult: " + historicalDataResult);
-		console.log("Snapshot: " + snapshot);
 
+		// Debug logging
+		console.log('Received snapshot:', snapshot);
 
-
-		var snapshotData = isCrypto
-			? snapshot.snapshots[symbol.replace('/', '%2F')]
-			: snapshot[symbol];
-
-		if (!snapshotData && symbol.includes('.'))
-			snapshotData = snapshot[symbol.replace('.', '')];
-
-
-		const currentPrice = snapshotData?.latestTrade?.p;
-		const dividendYieldData = await fetchDividendYield(symbol, currentPrice);
-
-		console.log("DividendYieldData: " + dividendYieldData);
-
-		if (!snapshotData) {
+		if (!snapshot) {
 			return NextResponse.json(
-				{ success: false, message: 'Asset not found in Alpaca data.' },
+				{ success: false, message: 'Asset not found.' },
 				{ status: 404 }
 			);
 		}
 
+		const snapshotData = await fetchSnapshot(symbol, isCrypto);
+		console.log('Processed snapshot data:', snapshotData);
+
+		if (!snapshotData) {
+			return NextResponse.json(
+				{ success: false, message: 'Asset not found.' },
+				{ status: 404 }
+			);
+		}
+
+		// Fetch additional data
+		const [historicalDataResult, assetDetails, newsData, fundamentals] = await Promise.all([
+			fetchHistoricalData(symbol, isCrypto),
+			fetchAssetDetails(symbol),
+			fetchNews(symbol),
+			fetchFundamentalMetrics(symbol)
+		]);
+
+		const currentPrice = snapshotData.latestTrade?.p || 0;
+		const prevClose = snapshotData.prevDailyBar?.c || 0;
+		const changePercent = prevClose ? ((currentPrice - prevClose) / prevClose) * 100 : 0;
+
 
 		const responseData = {
 			symbol,
-			name: assetDetails.name,
-			type: assetDetails.type || null,
-			price: snapshotData.latestTrade.p,
-			changePercent:
-				((snapshotData.dailyBar.c - snapshotData.prevDailyBar.c) /
-					snapshotData.prevDailyBar.c) *
-				100,
-			high: snapshotData.dailyBar.h,
-			low: snapshotData.dailyBar.l,
-			volume: snapshotData.dailyBar.v,
-			vwap: snapshotData.dailyBar.vw,
+			name: assetDetails.name || symbol,
+			type: assetDetails.type || 'stock',
+			price: currentPrice,
+			changePercent,
+			high: snapshotData.dailyBar?.h || currentPrice,
+			low: snapshotData.dailyBar?.l || currentPrice,
+			volume: snapshotData.dailyBar?.v || 0,
+			vwap: snapshotData.dailyBar?.vw || currentPrice,
 			historicalData: {
-				data: historicalDataResult.data,
-				error: historicalDataResult.error
+				data: historicalDataResult.data || [],
+				error: historicalDataResult.error || null
 			},
-			dividends: {
-				data: dividendYieldData?.data || null,
-				error: dividendYieldData?.error || null
-			},
-			news: newsData,
-			fundamentals
+			news: newsData || [],
+			fundamentals: fundamentals || [],
+			// Add data availability flags
+			dataAvailability: {
+				price: Boolean(currentPrice),
+				historical: Boolean(historicalDataResult?.data?.length),
+				news: Boolean(newsData?.length),
+				fundamentals: Boolean(fundamentals?.length)
+			}
 		};
 
+		console.log('Final response data:', responseData);
 
-
-		return NextResponse.json({ success: true, data: responseData });
+		return NextResponse.json({
+			success: true,
+			data: responseData
+		});
 	} catch (error) {
-		console.error('Error fetching data:', error);
+		console.error('API Error:', error);
 		return NextResponse.json(
-			{ success: false, message: 'Failed to fetch asset data.', details: error.message },
+			{ success: false, message: error.message },
 			{ status: 500 }
 		);
 	}

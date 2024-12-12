@@ -4,6 +4,7 @@ import Portfolio from '@/app/models/Portfolio';
 
 const ALPACA_API_KEY = process.env.ALPACA_KEY;
 const ALPACA_SECRET_KEY = process.env.ALPACA_SECRET_KEY;
+const YH_FINANCE_KEY = process.env.YH_FINANCE_KEY;
 
 export async function GET(req, { params }) {
 	try {
@@ -22,12 +23,34 @@ export async function GET(req, { params }) {
 			}
 		);
 
-		if (!alpacaResponse.ok) {
-			throw new Error('Failed to fetch current price');
+		let currentPrice = 0;
+
+		if (alpacaResponse.ok) {
+			const priceData = await alpacaResponse.json();
+			currentPrice = priceData[symbol]?.latestTrade?.p || 0;
 		}
 
-		const priceData = await alpacaResponse.json();
-		const currentPrice = priceData[symbol]?.latestTrade?.p || 0;
+		// If no data from Alpaca, fetch from Yahoo Finance
+		if (!currentPrice) {
+			const yfinanceResponse = await fetch(
+				`https://yfapi.net/v6/finance/quote?symbols=${symbol}`,
+				{
+					headers: {
+						'X-API-KEY': YH_FINANCE_KEY,
+					},
+				}
+			);
+
+			if (yfinanceResponse.ok) {
+				const yData = await yfinanceResponse.json();
+				currentPrice =
+					yData.quoteResponse.result[0]?.regularMarketPrice || 0;
+			} else {
+				throw new Error(
+					'Failed to fetch price data from both Alpaca and Yahoo Finance'
+				);
+			}
+		}
 
 		// Get portfolio holdings for this symbol
 		const portfolio = await Portfolio.findOne({

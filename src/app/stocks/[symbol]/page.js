@@ -219,30 +219,70 @@ export default function StockDetails() {
 
 	return (
 		<div className="container mx-auto p-6">
-			<h1 className="text-3xl font-bold">{symbol} Stock Details</h1>
-
-			<div className="mt-6">
-				{/* Stock Price & Metrics Chart */}
-				<div className="bg-white rounded-lg p-4 shadow-lg">
-					<h2 className="text-xl font-semibold text-black">Price & Metrics History</h2>
-					{historicalData.error ? (
-						<div className="h-[400px] flex items-center justify-center">
-							<p className="text-amber-600">
-								<span className="font-medium">Note:</span> Historical data temporarily unavailable: {historicalData.error}
-							</p>
-						</div>
-					) : historicalData.data?.length > 0 ? (
-						<div style={{ height: "400px" }}>
-							<Line data={chartData} options={chartOptions} />
-						</div>
-					) : (
-						<div className="h-[400px] flex items-center justify-center">
-							<p>No historical data available for this stock.</p>
-						</div>
-					)}
+			{/* Basic Info Card - Always show if we have price */}
+			<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
+				<div className="flex items-center justify-between">
+					<h1 className="text-3xl font-bold">{symbol}</h1>
+					<div className="flex gap-2">
+						{Object.entries(stockData.dataAvailability || {}).map(([key, available]) => (
+							<span
+								key={key}
+								className={`px-2 py-1 text-xs rounded-full ${
+									available
+										? 'bg-green-100 text-green-800'
+										: 'bg-gray-100 text-gray-600'
+								}`}
+							>
+								{key}
+							</span>
+						))}
+					</div>
 				</div>
 
-				{/* News */}
+				<div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6">
+					<div>
+						<p className="text-gray-900">Price</p>
+						<p className="text-2xl font-bold">${stockData.price?.toFixed(2)}</p>
+					</div>
+					<div>
+						<p className="text-gray-900">Change</p>
+						<p
+							className={`text-xl font-bold ${
+								stockData.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
+							}`}
+						>
+							{stockData.changePercent >= 0 ? '+' : ''}
+							{stockData.changePercent?.toFixed(2)}%
+						</p>
+					</div>
+					<div>
+						<p className="text-gray-900">Volume</p>
+						<p className="text-xl font-bold">{stockData.volume?.toLocaleString()}</p>
+					</div>
+					<div>
+						<p className="text-gray-900">VWAP</p>
+						<p className="text-xl font-bold">${stockData.vwap?.toFixed(2)}</p>
+					</div>
+				</div>
+			</div>
+
+			{/* Historical Data Chart - Only show if data available */}
+			{stockData.dataAvailability?.historical ? (
+				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
+					<h2 className="text-xl font-semibold mb-4">Price History</h2>
+					<div style={{ height: '400px' }}>
+						<Line data={chartData} options={chartOptions} />
+					</div>
+				</div>
+			) : (
+				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
+					<h2 className="text-xl font-semibold mb-4">Price History</h2>
+					<p className="text-gray-900">Historical data not available for this asset</p>
+				</div>
+			)}
+
+			{/* News Section - Only show if data available */}
+			{stockData.dataAvailability?.news ? (
 				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg">
 					<h3 className="text-lg font-semibold mb-4">Latest News</h3>
 					<div className="grid grid-cols-1 gap-6">
@@ -273,7 +313,7 @@ export default function StockDetails() {
 											>
 												{article.headline || article.title}
 											</a>
-											<time className="text-xs text-gray-500 whitespace-nowrap">
+											<time className="text-xs text-gray-700 whitespace-nowrap">
 												{new Date(article.created_at).toLocaleDateString('en-US', {
 													month: 'short',
 													day: 'numeric',
@@ -286,14 +326,14 @@ export default function StockDetails() {
 
 										{/* Summary */}
 										{article.summary && article.summary.trim() !== " " && (
-											<p className="text-sm text-gray-600 mb-3 line-clamp-2">
+											<p className="text-sm text-gray-700 mb-3 line-clamp-2">
 												{article.summary}
 											</p>
 										)}
 
 										{/* Footer */}
 										<div className="flex flex-wrap items-center gap-2 text-xs">
-											<div className="flex items-center text-gray-500">
+											<div className="flex items-center text-gray-700">
 												<span className="mr-2">Source:</span>
 												<a
 													href={`https://${article.source}.com`}
@@ -332,17 +372,25 @@ export default function StockDetails() {
 						))}
 					</div>
 				</div>
+			) : (
+				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
+					<h2 className="text-xl font-semibold mb-4">Latest News</h2>
+					<p className="text-gray-900">No news available for this asset</p>
+				</div>
+			)}
 
+			{/* Fundamentals Section - Only show if data available */}
+			{stockData.dataAvailability?.fundamentals && (
 				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
 					<h3 className="text-lg font-semibold mb-4">Financial Ratios</h3>
 					{fundamentals?.[selectedPeriod] && (
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-6">
 							{/* Profitability Ratios */}
 							<div>
-								<h4 className="text-sm font-medium text-gray-500 mb-2">Profitability</h4>
+								<h4 className="text-sm font-medium text-gray-700 mb-2">Profitability</h4>
 								<div className="space-y-2">
 									<div>
-										<p className="text-sm text-gray-600">ROA</p>
+										<p className="text-gray-900">ROA</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -351,7 +399,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-600">ROE</p>
+										<p className="text-gray-900">ROE</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -360,7 +408,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-600">Operating Margin</p>
+										<p className="text-gray-900">Operating Margin</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -373,10 +421,10 @@ export default function StockDetails() {
 
 							{/* Per Share Metrics */}
 							<div>
-								<h4 className="text-sm font-medium text-gray-500 mb-2">Per Share</h4>
+								<h4 className="text-sm font-medium text-gray-700 mb-2">Per Share</h4>
 								<div className="space-y-2">
 									<div>
-										<p className="text-sm text-gray-600">EPS</p>
+										<p className="text-gray-900">EPS</p>
 										<p className="font-semibold">
 											${calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -385,7 +433,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-600">Revenue/Share</p>
+										<p className="text-gray-900">Revenue/Share</p>
 										<p className="font-semibold">
 											${calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -394,7 +442,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-sm text-gray-600">Book Value/Share</p>
+										<p className="text-gray-900">Book Value/Share</p>
 										<p className="font-semibold">
 											${calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -407,10 +455,10 @@ export default function StockDetails() {
 
 							{/* Leverage Metrics */}
 							<div>
-								<h4 className="text-sm font-medium text-gray-500 mb-2">Leverage</h4>
+								<h4 className="text-sm font-medium text-gray-700 mb-2">Leverage</h4>
 								<div className="space-y-2">
 									<div>
-										<p className="text-sm text-gray-600">Debt/Equity</p>
+										<p className="text-gray-900">Debt/Equity</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -423,326 +471,326 @@ export default function StockDetails() {
 						</div>
 					)}
 				</div>
+			)}
 
-				{/* Financial Details Section */}
-				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
-					<div className="flex justify-between items-center mb-4">
-						<h3 className="text-lg font-semibold">Detailed Financials</h3>
-						<div className="flex flex-col items-end">
-							<select
-								value={selectedPeriod}
-								onChange={(e) => setSelectedPeriod(Number(e.target.value))}
-								className="p-2 border rounded-lg mb-1"
-							>
-								{fundamentals?.map((f, i) => (
-									<option key={i} value={i}>
-										{f.period.fiscalYear} {f.period.fiscalPeriod} ({new Date(f.period.endDate).toLocaleDateString()})
-									</option>
-								))}
-							</select>
+			{/* Financial Details Section */}
+			<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
+				<div className="flex justify-between items-center mb-4">
+					<h3 className="text-lg font-semibold">Detailed Financials</h3>
+					<div className="flex flex-col items-end">
+						<select
+							value={selectedPeriod}
+							onChange={(e) => setSelectedPeriod(Number(e.target.value))}
+							className="p-2 border rounded-lg mb-1"
+						>
+							{fundamentals?.map((f, i) => (
+								<option key={i} value={i}>
+									{f.period.fiscalYear} {f.period.fiscalPeriod} ({new Date(f.period.endDate).toLocaleDateString()})
+								</option>
+							))}
+						</select>
 
-							{/* Cache info display */}
-							<div className="text-xs text-gray-500">
-								{(() => {
-									const cachedData = getCachedData(symbol, 'financials');
-									const timestamp = cachedData?.timestamp;
-									const lastUpdated = timestamp ? new Date(timestamp) : null;
+						{/* Cache info display */}
+						<div className="text-xs text-gray-700">
+							{(() => {
+								const cachedData = getCachedData(symbol, 'financials');
+								const timestamp = cachedData?.timestamp;
+								const lastUpdated = timestamp ? new Date(timestamp) : null;
 
-									return (
-										<>
-											Last updated: {
-												lastUpdated && !isNaN(lastUpdated)
-													? lastUpdated.toLocaleString()
-													: 'Not cached yet'
-											}
-											{fundamentals?.[0]?.period?.fiscalPeriod && (
-												<span className="ml-2">
-													Latest Period: {fundamentals[0].period.fiscalYear} {' '}
-													{fundamentals[0].period.fiscalPeriod === 'TTM'
-														? 'Trailing 12 Months'
-														: fundamentals[0].period.fiscalPeriod}
-												</span>
-											)}
-										</>
-									);
-								})()}
-							</div>
+								return (
+									<>
+										Last updated: {
+											lastUpdated && !isNaN(lastUpdated)
+												? lastUpdated.toLocaleString()
+												: 'Not cached yet'
+										}
+										{fundamentals?.[0]?.period?.fiscalPeriod && (
+											<span className="ml-2">
+												Latest Period: {fundamentals[0].period.fiscalYear} {' '}
+												{fundamentals[0].period.fiscalPeriod === 'TTM'
+													? 'Trailing 12 Months'
+													: fundamentals[0].period.fiscalPeriod}
+											</span>
+										)}
+									</>
+								);
+							})()}
 						</div>
 					</div>
-					{fundamentals?.[selectedPeriod] && (
-						<div className="space-y-6">
-							{/* Meta Information */}
-							<div>
-								<h4 className="font-semibold mb-2">Filing Information</h4>
-								<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-									<div>
-										<p className="text-gray-500">Company</p>
-										<p>{fundamentals[selectedPeriod].companyInfo.name}</p>
+				</div>
+				{fundamentals?.[selectedPeriod] && (
+					<div className="space-y-6">
+						{/* Meta Information */}
+						<div>
+							<h4 className="font-semibold mb-2">Filing Information</h4>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+								<div>
+									<p className="text-gray-900">Company</p>
+									<p>{fundamentals[selectedPeriod].companyInfo.name}</p>
+								</div>
+								<div>
+									<p className="text-gray-900">Period</p>
+									<p>{fundamentals[selectedPeriod].period.fiscalYear} {fundamentals[selectedPeriod].period.fiscalPeriod}</p>
+								</div>
+								<div>
+									<p className="text-gray-900">Date Range</p>
+									<p>{new Date(fundamentals[selectedPeriod].period.startDate).toLocaleDateString()} - {new Date(fundamentals[selectedPeriod].period.endDate).toLocaleDateString()}</p>
+								</div>
+								<div>
+									<p className="text-gray-900">Filing Date</p>
+									<p>{new Date(fundamentals[selectedPeriod].period.filingDate).toLocaleDateString()}</p>
+								</div>
+							</div>
+						</div>
+
+						{/* Income Statement */}
+						<div>
+							<h4 className="font-semibold mb-2">Income Statement</h4>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+								{Object.entries(fundamentals[selectedPeriod].income).map(([key, value]) => (
+									<div key={key}>
+										<p className="text-gray-900">{value.label}</p>
+										<p>{value.unit === 'USD'
+											? `$${(value.value / 1e9).toFixed(2)}B`
+											: value.value?.toFixed(2)}</p>
 									</div>
-									<div>
-										<p className="text-gray-500">Period</p>
-										<p>{fundamentals[selectedPeriod].period.fiscalYear} {fundamentals[selectedPeriod].period.fiscalPeriod}</p>
+								))}
+							</div>
+						</div>
+
+						{/* Balance Sheet */}
+						<div>
+							<h4 className="font-semibold mb-2">Balance Sheet</h4>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+								{Object.entries(fundamentals[selectedPeriod].balance).map(([key, value]) => (
+									<div key={key}>
+										<p className="text-gray-900">{value.label}</p>
+										<p>{value.unit === 'USD'
+											? `$${(value.value / 1e9).toFixed(2)}B`
+											: value.value?.toFixed(2)}</p>
 									</div>
-									<div>
-										<p className="text-gray-500">Date Range</p>
-										<p>{new Date(fundamentals[selectedPeriod].period.startDate).toLocaleDateString()} - {new Date(fundamentals[selectedPeriod].period.endDate).toLocaleDateString()}</p>
+								))}
+							</div>
+						</div>
+
+						{/* Cash Flow */}
+						<div>
+							<h4 className="font-semibold mb-2">Cash Flow</h4>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+								{Object.entries(fundamentals[selectedPeriod].cashFlow).map(([key, value]) => (
+									<div key={key}>
+										<p className="text-gray-900">{value.label}</p>
+										<p>{value.unit === 'USD'
+											? `$${(value.value / 1e9).toFixed(2)}B`
+											: value.value?.toFixed(2)}</p>
 									</div>
-									<div>
-										<p className="text-gray-500">Filing Date</p>
-										<p>{new Date(fundamentals[selectedPeriod].period.filingDate).toLocaleDateString()}</p>
+								))}
+							</div>
+						</div>
+
+						{/* Comprehensive Income */}
+						<div>
+							<h4 className="font-semibold mb-2">Comprehensive Income</h4>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+								{Object.entries(fundamentals[selectedPeriod].comprehensive).map(([key, value]) => (
+									<div key={key}>
+										<p className="text-gray-900">{value.label}</p>
+										<p>{value.unit === 'USD'
+											? `$${(value.value / 1e9).toFixed(2)}B`
+											: value.value?.toFixed(2)}</p>
 									</div>
-								</div>
+								))}
 							</div>
+						</div>
 
-							{/* Income Statement */}
-							<div>
-								<h4 className="font-semibold mb-2">Income Statement</h4>
-								<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-									{Object.entries(fundamentals[selectedPeriod].income).map(([key, value]) => (
-										<div key={key}>
-											<p className="text-gray-500">{value.label}</p>
-											<p>{value.unit === 'USD'
-												? `$${(value.value / 1e9).toFixed(2)}B`
-												: value.value?.toFixed(2)}</p>
+						{/* Filing Link */}
+						<div>
+							<button
+								onClick={async () => {
+									try {
+										const response = await fetch(`/api/stocks/filings/${encodeURIComponent(fundamentals[selectedPeriod].period.sourceUrl)}`);
+										const data = await response.json();
+										setFilingDetails(JSON.parse(data.data).results);
+										setShowFiling(true);
+									} catch (error) {
+										console.error('Failed to fetch filing:', error);
+									}
+								}}
+								className="text-blue-600 hover:underline text-sm flex items-center gap-1"
+							>
+								View SEC Filing Details
+								<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+								</svg>
+							</button>
+
+							{/* Filing Modal */}
+							{showFiling && filingDetails && (
+								<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+									<div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto p-6">
+										<div className="flex justify-between items-center mb-6">
+											<h3 className="text-xl font-semibold">SEC Filing Details</h3>
+											<button
+												onClick={() => setShowFiling(false)}
+												className="text-gray-700 hover:text-gray-700"
+											>
+												<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+												</svg>
+											</button>
 										</div>
-									))}
-								</div>
-							</div>
 
-							{/* Balance Sheet */}
-							<div>
-								<h4 className="font-semibold mb-2">Balance Sheet</h4>
-								<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-									{Object.entries(fundamentals[selectedPeriod].balance).map(([key, value]) => (
-										<div key={key}>
-											<p className="text-gray-500">{value.label}</p>
-											<p>{value.unit === 'USD'
-												? `$${(value.value / 1e9).toFixed(2)}B`
-												: value.value?.toFixed(2)}</p>
-										</div>
-									))}
-								</div>
-							</div>
-
-							{/* Cash Flow */}
-							<div>
-								<h4 className="font-semibold mb-2">Cash Flow</h4>
-								<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-									{Object.entries(fundamentals[selectedPeriod].cashFlow).map(([key, value]) => (
-										<div key={key}>
-											<p className="text-gray-500">{value.label}</p>
-											<p>{value.unit === 'USD'
-												? `$${(value.value / 1e9).toFixed(2)}B`
-												: value.value?.toFixed(2)}</p>
-										</div>
-									))}
-								</div>
-							</div>
-
-							{/* Comprehensive Income */}
-							<div>
-								<h4 className="font-semibold mb-2">Comprehensive Income</h4>
-								<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-									{Object.entries(fundamentals[selectedPeriod].comprehensive).map(([key, value]) => (
-										<div key={key}>
-											<p className="text-gray-500">{value.label}</p>
-											<p>{value.unit === 'USD'
-												? `$${(value.value / 1e9).toFixed(2)}B`
-												: value.value?.toFixed(2)}</p>
-										</div>
-									))}
-								</div>
-							</div>
-
-							{/* Filing Link */}
-							<div>
-								<button
-									onClick={async () => {
-										try {
-											const response = await fetch(`/api/stocks/filings/${encodeURIComponent(fundamentals[selectedPeriod].period.sourceUrl)}`);
-											const data = await response.json();
-											setFilingDetails(JSON.parse(data.data).results);
-											setShowFiling(true);
-										} catch (error) {
-											console.error('Failed to fetch filing:', error);
-										}
-									}}
-									className="text-blue-600 hover:underline text-sm flex items-center gap-1"
-								>
-									View SEC Filing Details
-									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-									</svg>
-								</button>
-
-								{/* Filing Modal */}
-								{showFiling && filingDetails && (
-									<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-										<div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto p-6">
-											<div className="flex justify-between items-center mb-6">
-												<h3 className="text-xl font-semibold">SEC Filing Details</h3>
-												<button
-													onClick={() => setShowFiling(false)}
-													className="text-gray-500 hover:text-gray-700"
-												>
-													<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-													</svg>
-												</button>
+										<div className="space-y-6">
+											{/* Basic Info */}
+											<div className="grid grid-cols-2 gap-4 text-sm">
+												<div>
+													<p className="text-gray-900">Filing Type</p>
+													<p className="font-medium">{filingDetails.type}</p>
+												</div>
+												<div>
+													<p className="text-gray-900">Filing Date</p>
+													<p className="font-medium">{new Date(filingDetails.filing_date).toLocaleDateString()}</p>
+												</div>
+												<div>
+													<p className="text-gray-900">Period of Report</p>
+													<p className="font-medium">{new Date(filingDetails.period_of_report_date).toLocaleDateString()}</p>
+												</div>
+												<div>
+													<p className="text-gray-900">Accession Number</p>
+													<p className="font-medium">{filingDetails.accession_number}</p>
+												</div>
 											</div>
 
-											<div className="space-y-6">
-												{/* Basic Info */}
+											{/* Company Info */}
+											<div>
+												<h4 className="font-semibold mb-2">Company Information</h4>
 												<div className="grid grid-cols-2 gap-4 text-sm">
 													<div>
-														<p className="text-gray-500">Filing Type</p>
-														<p className="font-medium">{filingDetails.type}</p>
+														<p className="text-gray-900">Name</p>
+														<p className="font-medium">{filingDetails.entities[0].company_data.name}</p>
 													</div>
 													<div>
-														<p className="text-gray-500">Filing Date</p>
-														<p className="font-medium">{new Date(filingDetails.filing_date).toLocaleDateString()}</p>
+														<p className="text-gray-900">CIK</p>
+														<p className="font-medium">{filingDetails.entities[0].company_data.cik}</p>
 													</div>
 													<div>
-														<p className="text-gray-500">Period of Report</p>
-														<p className="font-medium">{new Date(filingDetails.period_of_report_date).toLocaleDateString()}</p>
-													</div>
-													<div>
-														<p className="text-gray-500">Accession Number</p>
-														<p className="font-medium">{filingDetails.accession_number}</p>
+														<p className="text-gray-900">Tickers</p>
+														<p className="font-medium">{filingDetails.entities[0].company_data.tickers.join(", ")}</p>
 													</div>
 												</div>
+											</div>
 
-												{/* Company Info */}
-												<div>
-													<h4 className="font-semibold mb-2">Company Information</h4>
-													<div className="grid grid-cols-2 gap-4 text-sm">
-														<div>
-															<p className="text-gray-500">Name</p>
-															<p className="font-medium">{filingDetails.entities[0].company_data.name}</p>
-														</div>
-														<div>
-															<p className="text-gray-500">CIK</p>
-															<p className="font-medium">{filingDetails.entities[0].company_data.cik}</p>
-														</div>
-														<div>
-															<p className="text-gray-500">Tickers</p>
-															<p className="font-medium">{filingDetails.entities[0].company_data.tickers.join(", ")}</p>
-														</div>
-													</div>
-												</div>
-
-												{/* Public SEC Link */}
-												<div>
-													<h4 className="font-semibold mb-2">View Filing</h4>
-													<a
-														href={`https://www.sec.gov/Archives/edgar/data/${filingDetails.entities[0].company_data.cik}/${filingDetails.accession_number.replace(/-/g, '')}`}
-														target="_blank"
-														rel="noopener noreferrer"
-														className="text-blue-600 hover:underline flex items-center gap-1"
-													>
-														View on SEC EDGAR Website
-														<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-														</svg>
-													</a>
-												</div>
+											{/* Public SEC Link */}
+											<div>
+												<h4 className="font-semibold mb-2">View Filing</h4>
+												<a
+													href={`https://www.sec.gov/Archives/edgar/data/${filingDetails.entities[0].company_data.cik}/${filingDetails.accession_number.replace(/-/g, '')}`}
+													target="_blank"
+													rel="noopener noreferrer"
+													className="text-blue-600 hover:underline flex items-center gap-1"
+												>
+													View on SEC EDGAR Website
+													<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+													</svg>
+												</a>
 											</div>
 										</div>
 									</div>
-								)}
-							</div>
+								</div>
+							)}
 						</div>
-					)}
-				</div>
+					</div>
+				)}
+			</div>
 
-				{/* Historical Metrics Chart */}
-				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
-					<h3 className="text-lg font-semibold mb-4">Metrics Over Time</h3>
+			{/* Historical Metrics Chart */}
+			<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
+				<h3 className="text-lg font-semibold mb-4">Metrics Over Time</h3>
 
 
-					{/* Chart */}
-					<div style={{ height: "400px" }}>
-						<Line
-							data={{
-								labels: historicalData?.data?.map(data => new Date(data.t)),
-								datasets: [
-									{
-										label: 'Open',
-										data: historicalData?.data?.map(data => data.o),
-										borderColor: 'rgb(75, 192, 192)',
-										tension: 0.1
-									},
-									{
-										label: 'High',
-										data: historicalData?.data?.map(data => data.h),
-										borderColor: 'rgb(54, 162, 235)',
-										tension: 0.1
-									},
-									{
-										label: 'Low',
-										data: historicalData?.data?.map(data => data.l),
-										borderColor: 'rgb(255, 99, 132)',
-										tension: 0.1
-									},
-									{
-										label: 'Close',
-										data: historicalData?.data?.map(data => data.c),
-										borderColor: 'rgb(153, 102, 255)',
-										tension: 0.1
-									},
-									{
-										label: 'Volume',
-										data: historicalData?.data?.map(data => data.v),
-										borderColor: 'rgb(255, 159, 64)',
-										tension: 0.1,
-										yAxisID: 'volume'
-									}
-								]
-							}}
-							options={{
-								responsive: true,
-								maintainAspectRatio: false,
-								interaction: {
-									mode: 'index',
-									intersect: false,
+				{/* Chart */}
+				<div style={{ height: "400px" }}>
+					<Line
+						data={{
+							labels: historicalData?.data?.map(data => new Date(data.t)),
+							datasets: [
+								{
+									label: 'Open',
+									data: historicalData?.data?.map(data => data.o),
+									borderColor: 'rgb(75, 192, 192)',
+									tension: 0.1
 								},
-								scales: {
-									x: {
-										type: 'time',
-										time: {
-											unit: 'month',
-											tooltipFormat: 'MMM yyyy'
-										},
-										title: {
-											display: true,
-											text: 'Date'
-										}
+								{
+									label: 'High',
+									data: historicalData?.data?.map(data => data.h),
+									borderColor: 'rgb(54, 162, 235)',
+									tension: 0.1
+								},
+								{
+									label: 'Low',
+									data: historicalData?.data?.map(data => data.l),
+									borderColor: 'rgb(255, 99, 132)',
+									tension: 0.1
+								},
+								{
+									label: 'Close',
+									data: historicalData?.data?.map(data => data.c),
+									borderColor: 'rgb(153, 102, 255)',
+									tension: 0.1
+								},
+								{
+									label: 'Volume',
+									data: historicalData?.data?.map(data => data.v),
+									borderColor: 'rgb(255, 159, 64)',
+									tension: 0.1,
+									yAxisID: 'volume'
+								}
+							]
+						}}
+						options={{
+							responsive: true,
+							maintainAspectRatio: false,
+							interaction: {
+								mode: 'index',
+								intersect: false,
+							},
+							scales: {
+								x: {
+									type: 'time',
+									time: {
+										unit: 'month',
+										tooltipFormat: 'MMM yyyy'
 									},
-									y: {
-										type: 'linear',
+									title: {
 										display: true,
-										position: 'left',
-										title: {
-											display: true,
-											text: 'Price ($)'
-										}
+										text: 'Date'
+									}
+								},
+								y: {
+									type: 'linear',
+									display: true,
+									position: 'left',
+									title: {
+										display: true,
+										text: 'Price ($)'
+									}
+								},
+								volume: {
+									type: 'linear',
+									display: true,
+									position: 'right',
+									title: {
+										display: true,
+										text: 'Volume'
 									},
-									volume: {
-										type: 'linear',
-										display: true,
-										position: 'right',
-										title: {
-											display: true,
-											text: 'Volume'
-										},
-										grid: {
-											drawOnChartArea: false
-										}
+									grid: {
+										drawOnChartArea: false
 									}
 								}
-							}}
-						/>
-					</div>
+							}
+						}}
+					/>
 				</div>
 			</div>
 		</div >
