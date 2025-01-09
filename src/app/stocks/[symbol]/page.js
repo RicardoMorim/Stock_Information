@@ -241,11 +241,11 @@ export default function StockDetails() {
 
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6">
 					<div>
-						<p className="text-gray-900">Price</p>
+						<p className="text-gray-600">Price</p>
 						<p className="text-2xl font-bold">${stockData.price?.toFixed(2)}</p>
 					</div>
 					<div>
-						<p className="text-gray-900">Change</p>
+						<p className="text-gray-600">Change</p>
 						<p
 							className={`text-xl font-bold ${
 								stockData.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
@@ -256,11 +256,11 @@ export default function StockDetails() {
 						</p>
 					</div>
 					<div>
-						<p className="text-gray-900">Volume</p>
+						<p className="text-gray-600">Volume</p>
 						<p className="text-xl font-bold">{stockData.volume?.toLocaleString()}</p>
 					</div>
 					<div>
-						<p className="text-gray-900">VWAP</p>
+						<p className="text-gray-600">VWAP</p>
 						<p className="text-xl font-bold">${stockData.vwap?.toFixed(2)}</p>
 					</div>
 				</div>
@@ -277,12 +277,13 @@ export default function StockDetails() {
 			) : (
 				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
 					<h2 className="text-xl font-semibold mb-4">Price History</h2>
-					<p className="text-gray-900">Historical data not available for this asset</p>
+					<p className="text-gray-600">Historical data not available for this asset</p>
 				</div>
 			)}
 
 			{/* News Section - Only show if data available */}
 			{stockData.dataAvailability?.news ? (
+				// ...existing code...
 				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg">
 					<h3 className="text-lg font-semibold mb-4">Latest News</h3>
 					<div className="grid grid-cols-1 gap-6">
@@ -313,7 +314,7 @@ export default function StockDetails() {
 											>
 												{article.headline || article.title}
 											</a>
-											<time className="text-xs text-gray-700 whitespace-nowrap">
+											<time className="text-xs text-gray-500 whitespace-nowrap">
 												{new Date(article.created_at).toLocaleDateString('en-US', {
 													month: 'short',
 													day: 'numeric',
@@ -326,14 +327,14 @@ export default function StockDetails() {
 
 										{/* Summary */}
 										{article.summary && article.summary.trim() !== " " && (
-											<p className="text-sm text-gray-700 mb-3 line-clamp-2">
+											<p className="text-sm text-gray-600 mb-3 line-clamp-2">
 												{article.summary}
 											</p>
 										)}
 
 										{/* Footer */}
 										<div className="flex flex-wrap items-center gap-2 text-xs">
-											<div className="flex items-center text-gray-700">
+											<div className="flex items-center text-gray-500">
 												<span className="mr-2">Source:</span>
 												<a
 													href={`https://${article.source}.com`}
@@ -375,22 +376,23 @@ export default function StockDetails() {
 			) : (
 				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
 					<h2 className="text-xl font-semibold mb-4">Latest News</h2>
-					<p className="text-gray-900">No news available for this asset</p>
+					<p className="text-gray-600">No news available for this asset</p>
 				</div>
 			)}
 
 			{/* Fundamentals Section - Only show if data available */}
 			{stockData.dataAvailability?.fundamentals && (
+				// ...existing code...
 				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
 					<h3 className="text-lg font-semibold mb-4">Financial Ratios</h3>
 					{fundamentals?.[selectedPeriod] && (
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-6">
 							{/* Profitability Ratios */}
 							<div>
-								<h4 className="text-sm font-medium text-gray-700 mb-2">Profitability</h4>
+								<h4 className="text-sm font-medium text-gray-500 mb-2">Profitability</h4>
 								<div className="space-y-2">
 									<div>
-										<p className="text-gray-900">ROA</p>
+										<p className="text-sm text-gray-600">ROA</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -399,7 +401,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-gray-900">ROE</p>
+										<p className="text-sm text-gray-600">ROE</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -408,7 +410,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-gray-900">Operating Margin</p>
+										<p className="text-sm text-gray-600">Operating Margin</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -421,10 +423,10 @@ export default function StockDetails() {
 
 							{/* Per Share Metrics */}
 							<div>
-								<h4 className="text-sm font-medium text-gray-700 mb-2">Per Share</h4>
+								<h4 className="text-sm font-medium text-gray-500 mb-2">Per Share</h4>
 								<div className="space-y-2">
 									<div>
-										<p className="text-gray-900">EPS</p>
+										<p className="text-sm text-gray-600">EPS</p>
 										<p className="font-semibold">
 											${calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -433,7 +435,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-gray-900">Revenue/Share</p>
+										<p className="text-sm text-gray-600">Revenue/Share</p>
 										<p className="font-semibold">
 											${calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -442,7 +444,7 @@ export default function StockDetails() {
 										</p>
 									</div>
 									<div>
-										<p className="text-gray-900">Book Value/Share</p>
+										<p className="text-sm text-gray-600">Book Value/Share</p>
 										<p className="font-semibold">
 											${calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -455,10 +457,10 @@ export default function StockDetails() {
 
 							{/* Leverage Metrics */}
 							<div>
-								<h4 className="text-sm font-medium text-gray-700 mb-2">Leverage</h4>
+								<h4 className="text-sm font-medium text-gray-500 mb-2">Leverage</h4>
 								<div className="space-y-2">
 									<div>
-										<p className="text-gray-900">Debt/Equity</p>
+										<p className="text-sm text-gray-600">Debt/Equity</p>
 										<p className="font-semibold">
 											{calculateFinancialRatios(
 												fundamentals[selectedPeriod].income,
@@ -491,7 +493,7 @@ export default function StockDetails() {
 						</select>
 
 						{/* Cache info display */}
-						<div className="text-xs text-gray-700">
+						<div className="text-xs text-gray-500">
 							{(() => {
 								const cachedData = getCachedData(symbol, 'financials');
 								const timestamp = cachedData?.timestamp;
@@ -525,19 +527,19 @@ export default function StockDetails() {
 							<h4 className="font-semibold mb-2">Filing Information</h4>
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 								<div>
-									<p className="text-gray-900">Company</p>
+									<p className="text-gray-500">Company</p>
 									<p>{fundamentals[selectedPeriod].companyInfo.name}</p>
 								</div>
 								<div>
-									<p className="text-gray-900">Period</p>
+									<p className="text-gray-500">Period</p>
 									<p>{fundamentals[selectedPeriod].period.fiscalYear} {fundamentals[selectedPeriod].period.fiscalPeriod}</p>
 								</div>
 								<div>
-									<p className="text-gray-900">Date Range</p>
+									<p className="text-gray-500">Date Range</p>
 									<p>{new Date(fundamentals[selectedPeriod].period.startDate).toLocaleDateString()} - {new Date(fundamentals[selectedPeriod].period.endDate).toLocaleDateString()}</p>
 								</div>
 								<div>
-									<p className="text-gray-900">Filing Date</p>
+									<p className="text-gray-500">Filing Date</p>
 									<p>{new Date(fundamentals[selectedPeriod].period.filingDate).toLocaleDateString()}</p>
 								</div>
 							</div>
@@ -549,7 +551,7 @@ export default function StockDetails() {
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 								{Object.entries(fundamentals[selectedPeriod].income).map(([key, value]) => (
 									<div key={key}>
-										<p className="text-gray-900">{value.label}</p>
+										<p className="text-gray-500">{value.label}</p>
 										<p>{value.unit === 'USD'
 											? `$${(value.value / 1e9).toFixed(2)}B`
 											: value.value?.toFixed(2)}</p>
@@ -564,7 +566,7 @@ export default function StockDetails() {
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 								{Object.entries(fundamentals[selectedPeriod].balance).map(([key, value]) => (
 									<div key={key}>
-										<p className="text-gray-900">{value.label}</p>
+										<p className="text-gray-500">{value.label}</p>
 										<p>{value.unit === 'USD'
 											? `$${(value.value / 1e9).toFixed(2)}B`
 											: value.value?.toFixed(2)}</p>
@@ -579,7 +581,7 @@ export default function StockDetails() {
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 								{Object.entries(fundamentals[selectedPeriod].cashFlow).map(([key, value]) => (
 									<div key={key}>
-										<p className="text-gray-900">{value.label}</p>
+										<p className="text-gray-500">{value.label}</p>
 										<p>{value.unit === 'USD'
 											? `$${(value.value / 1e9).toFixed(2)}B`
 											: value.value?.toFixed(2)}</p>
@@ -594,7 +596,7 @@ export default function StockDetails() {
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 								{Object.entries(fundamentals[selectedPeriod].comprehensive).map(([key, value]) => (
 									<div key={key}>
-										<p className="text-gray-900">{value.label}</p>
+										<p className="text-gray-500">{value.label}</p>
 										<p>{value.unit === 'USD'
 											? `$${(value.value / 1e9).toFixed(2)}B`
 											: value.value?.toFixed(2)}</p>
@@ -632,7 +634,7 @@ export default function StockDetails() {
 											<h3 className="text-xl font-semibold">SEC Filing Details</h3>
 											<button
 												onClick={() => setShowFiling(false)}
-												className="text-gray-700 hover:text-gray-700"
+												className="text-gray-500 hover:text-gray-700"
 											>
 												<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -644,19 +646,19 @@ export default function StockDetails() {
 											{/* Basic Info */}
 											<div className="grid grid-cols-2 gap-4 text-sm">
 												<div>
-													<p className="text-gray-900">Filing Type</p>
+													<p className="text-gray-500">Filing Type</p>
 													<p className="font-medium">{filingDetails.type}</p>
 												</div>
 												<div>
-													<p className="text-gray-900">Filing Date</p>
+													<p className="text-gray-500">Filing Date</p>
 													<p className="font-medium">{new Date(filingDetails.filing_date).toLocaleDateString()}</p>
 												</div>
 												<div>
-													<p className="text-gray-900">Period of Report</p>
+													<p className="text-gray-500">Period of Report</p>
 													<p className="font-medium">{new Date(filingDetails.period_of_report_date).toLocaleDateString()}</p>
 												</div>
 												<div>
-													<p className="text-gray-900">Accession Number</p>
+													<p className="text-gray-500">Accession Number</p>
 													<p className="font-medium">{filingDetails.accession_number}</p>
 												</div>
 											</div>
@@ -666,15 +668,15 @@ export default function StockDetails() {
 												<h4 className="font-semibold mb-2">Company Information</h4>
 												<div className="grid grid-cols-2 gap-4 text-sm">
 													<div>
-														<p className="text-gray-900">Name</p>
+														<p className="text-gray-500">Name</p>
 														<p className="font-medium">{filingDetails.entities[0].company_data.name}</p>
 													</div>
 													<div>
-														<p className="text-gray-900">CIK</p>
+														<p className="text-gray-500">CIK</p>
 														<p className="font-medium">{filingDetails.entities[0].company_data.cik}</p>
 													</div>
 													<div>
-														<p className="text-gray-900">Tickers</p>
+														<p className="text-gray-500">Tickers</p>
 														<p className="font-medium">{filingDetails.entities[0].company_data.tickers.join(", ")}</p>
 													</div>
 												</div>

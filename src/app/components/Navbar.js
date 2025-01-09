@@ -25,22 +25,36 @@ export default function Navbar() {
         <Link href="/">
           <span className="text-white font-bold text-xl">Stock Investor</span>
         </Link>
-        <div>
+
+        <div className="flex items-center space-x-6">
           {isLoggedIn ? (
             <>
+              {/* Navigation Links */}
+              <Link 
+                href="/portfolio" 
+                className="text-white hover:text-orange transition-colors"
+              >
+                Portfolio
+              </Link>
+              <Link 
+                href="/stocks" 
+                className="text-white hover:text-orange transition-colors"
+              >
+                Stocks
+              </Link>
               <button
                 onClick={handleLogout}
-                className="text-orange hover:underline"
+                className="text-orange hover:text-white transition-colors"
               >
                 Logout
               </button>
             </>
           ) : (
             <>
-              <Link href="/login" className="text-orange mr-4 hover:underline">
+              <Link href="/login" className="text-orange hover:text-white transition-colors">
                 Login
               </Link>
-              <Link href="/register" className="text-orange hover:underline">
+              <Link href="/register" className="text-orange hover:text-white transition-colors">
                 Register
               </Link>
             </>

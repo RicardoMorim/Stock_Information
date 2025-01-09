@@ -22,9 +22,7 @@ export async function POST(request) {
       );
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
 
     return NextResponse.json({ token });
   } catch (error) {

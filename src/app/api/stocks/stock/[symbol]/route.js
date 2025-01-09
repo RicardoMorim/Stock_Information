@@ -338,8 +338,6 @@ export async function GET(req, { params }) {
 		const isCrypto = symbol.includes('/');
 		const snapshot = await fetchSnapshot(symbol, isCrypto);
 
-		// Debug logging
-		console.log('Received snapshot:', snapshot);
 
 		if (!snapshot) {
 			return NextResponse.json(
@@ -349,7 +347,6 @@ export async function GET(req, { params }) {
 		}
 
 		const snapshotData = await fetchSnapshot(symbol, isCrypto);
-		console.log('Processed snapshot data:', snapshotData);
 
 		if (!snapshotData) {
 			return NextResponse.json(
@@ -396,7 +393,6 @@ export async function GET(req, { params }) {
 			}
 		};
 
-		console.log('Final response data:', responseData);
 
 		return NextResponse.json({
 			success: true,
