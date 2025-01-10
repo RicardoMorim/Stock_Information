@@ -19,6 +19,13 @@ export default function PortfolioSummary() {
 	});
 	const [formError, setFormError] = useState('');
 	const [exchangeRates, setExchangeRates] = useState(null);
+	const [showSellModal, setShowSellModal] = useState(false);
+	const [sellFormData, setSellFormData] = useState({
+		symbol: '',
+		shares: '',
+		currentShares: 0
+	});
+	const [sellFormError, setSellFormError] = useState('');
 
 	useEffect(() => {
 		// Check if user is authenticated
@@ -100,6 +107,49 @@ export default function PortfolioSummary() {
 		} catch (error) {
 			console.error('Error:', error);
 			setFormError('Failed to add position');
+		}
+	};
+
+	const handleSell = async (e) => {
+		e.preventDefault();
+		setSellFormError('');
+
+		if (Number(sellFormData.shares) > sellFormData.currentShares) {
+			setSellFormError('Cannot sell more shares than owned');
+			return;
+		}
+
+		try {
+			const token = localStorage.getItem("token");
+			const response = await fetch(`/api/portfolio/${sellFormData.symbol}`, {
+				method: 'DELETE',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					shares: Number(sellFormData.shares)
+				})
+			});
+
+			const data = await response.json();
+
+			if (data.success) {
+				setShowSellModal(false);
+				setSellFormData({
+					symbol: '',
+					shares: '',
+					currentShares: 0
+				});
+				setPortfolio(data.data);
+			} else {
+				setSellFormError(data.message || 'Failed to sell position');
+			}
+		} catch (error) {
+			console.error('Error:', error);
+			setSellFormError('Failed to sell position');
+		} finally{
+			fetchPortfolio();
 		}
 	};
 
@@ -227,7 +277,7 @@ export default function PortfolioSummary() {
 									</div>
 									<div className="bg-gray-50 p-4 rounded-lg group-hover:bg-white transition-colors duration-200">
 										<p className="text-sm font-medium text-gray-600 mb-1">Total Investment</p>
-										<p className="text-lg font-bold text-black">{formatCurrency(stock.totalCostEUR)}</p>
+										<p className="text-lg font-bold text-black">{formatCurrency(stock.totalCost)}</p>
 									</div>
 									<div className="bg-gray-50 p-4 rounded-lg group-hover:bg-white transition-colors duration-200">
 										<p className="text-sm font-medium text-gray-600 mb-1">Return</p>
@@ -235,6 +285,19 @@ export default function PortfolioSummary() {
 											{stock.percentageReturn >= 0 ? '+' : ''}{formatNumber(stock.percentageReturn)}%
 										</p>
 									</div>
+									<button
+										onClick={() => {
+											setSellFormData({
+												symbol: stock.symbol,
+												shares: '',
+												currentShares: stock.totalShares
+											});
+											setShowSellModal(true);
+										}}
+										className="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-full transition-colors"
+									>
+										<FiX className="w-5 h-5" />
+									</button>
 								</div>
 							</div>
 						</div>
@@ -254,150 +317,221 @@ export default function PortfolioSummary() {
 				<FiPlusCircle className="w-6 h-6" />
 			</button>
 
-			{
-		showModal && (
-			<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-				<div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 transform transition-all duration-200 ease-out">
-					<div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
-						<h3 className="text-xl font-bold text-black">Add New Position</h3>
-						<button
-							onClick={() => setShowModal(false)}
-							className="text-gray-600 hover:text-black transition-colors p-1 hover:bg-gray-100 rounded-full"
-						>
-							<FiX className="w-6 h-6" />
-						</button>
-					</div>
 
-					<form onSubmit={handleSubmit} className="p-6">
-						<div className="space-y-6">
-							{/* Form fields - update text colors */}
-							<div>
-								<label className="block text-base font-semibold text-black mb-2">
-									Symbol
-								</label>
-								<input
-									type="text"
-									required
-									className="w-full px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-									value={formData.symbol}
-									onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
-									placeholder="AAPL"
-								/>
-							</div>
+			{showSellModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+						<div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+							<h3 className="text-xl font-bold text-black">Sell Position</h3>
+							<button
+								onClick={() => setShowSellModal(false)}
+								className="text-gray-600 hover:text-black transition-colors p-1 hover:bg-gray-100 rounded-full"
+							>
+								<FiX className="w-6 h-6" />
+							</button>
+						</div>
 
-							{/* Shares and Cost */}
-							<div className="grid grid-cols-2 gap-4">
+						<form onSubmit={handleSell} className="p-6">
+							<div className="space-y-6">
+								<div>
+									<label className="block text-base font-semibold text-black mb-2">
+										Symbol
+									</label>
+									<input
+										type="text"
+										disabled
+										className="w-full px-4 py-2 text-black bg-gray-100 border border-gray-300 rounded-lg"
+										value={sellFormData.symbol}
+									/>
+								</div>
+
 								<div>
 									<label className="block text-sm font-medium text-gray-900 mb-1">
-										Shares
+										Shares to Sell (Max: {sellFormData.currentShares})
 									</label>
 									<input
 										type="number"
 										required
 										min="0.0001"
+										max={sellFormData.currentShares}
 										step="0.0001"
 										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-										value={formData.shares}
-										onChange={(e) => setFormData({ ...formData, shares: e.target.value })}
-										placeholder="100"
+										value={sellFormData.shares}
+										onChange={(e) => setSellFormData({ ...sellFormData, shares: e.target.value })}
+										placeholder={`Enter amount (max: ${sellFormData.currentShares})`}
 									/>
 								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-900 mb-1">
-										Cost Per Share
-									</label>
-									<input
-										type="number"
-										required
-										min="0.01"
-										step="0.001"
-										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-										value={formData.costPerShare}
-										onChange={(e) => setFormData({ ...formData, costPerShare: e.target.value })}
-										placeholder="150.00"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-900 mb-1">
-										Trading Currency
-									</label>
-									<select
-										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-										value={formData.currency}
-										onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-									>
-										<option value="PLN">PLN - Polish Złoty</option>
-										<option value="USD">USD - US Dollar</option>
-										<option value="EUR">EUR - Euro</option>
-										<option value="GBP">GBP - British Pound</option>
-										{/* Add more currencies as needed */}
-									</select>
-								</div>
+
+								{sellFormError && (
+									<div className="text-red-600 text-sm mt-2 font-medium">
+										{sellFormError}
+									</div>
+								)}
 							</div>
 
-							{/* Show the converted amount in EUR */}
-							{exchangeRates && formData.costPerShare && (
-								<div className="mt-2 text-sm text-gray-600">
-									Equivalent in EUR: {formatCurrency(
-										Number(formData.costPerShare) / exchangeRates[formData.currency] * exchangeRates['EUR']
+							<div className="mt-6 flex justify-end space-x-3">
+								<button
+									type="button"
+									onClick={() => setShowSellModal(false)}
+									className="px-4 py-2 text-sm font-medium text-gray-900 hover:text-gray-900 transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+								>
+									Sell Position
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
+			{
+				showModal && (
+					<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+						<div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 transform transition-all duration-200 ease-out">
+							<div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+								<h3 className="text-xl font-bold text-black">Add New Position</h3>
+								<button
+									onClick={() => setShowModal(false)}
+									className="text-gray-600 hover:text-black transition-colors p-1 hover:bg-gray-100 rounded-full"
+								>
+									<FiX className="w-6 h-6" />
+								</button>
+							</div>
+
+							<form onSubmit={handleSubmit} className="p-6">
+								<div className="space-y-6">
+									{/* Form fields - update text colors */}
+									<div>
+										<label className="block text-base font-semibold text-black mb-2">
+											Symbol
+										</label>
+										<input
+											type="text"
+											required
+											className="w-full px-4 py-2 text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+											value={formData.symbol}
+											onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
+											placeholder="AAPL"
+										/>
+									</div>
+
+									{/* Shares and Cost */}
+									<div className="grid grid-cols-2 gap-4">
+										<div>
+											<label className="block text-sm font-medium text-gray-900 mb-1">
+												Shares
+											</label>
+											<input
+												type="number"
+												required
+												min="0.0001"
+												step="0.0001"
+												className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+												value={formData.shares}
+												onChange={(e) => setFormData({ ...formData, shares: e.target.value })}
+												placeholder="100"
+											/>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-900 mb-1">
+												Cost Per Share
+											</label>
+											<input
+												type="number"
+												required
+												min="0.01"
+												step="0.001"
+												className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+												value={formData.costPerShare}
+												onChange={(e) => setFormData({ ...formData, costPerShare: e.target.value })}
+												placeholder="150.00"
+											/>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-900 mb-1">
+												Trading Currency
+											</label>
+											<select
+												className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+												value={formData.currency}
+												onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+											>
+												<option value="PLN">PLN - Polish Złoty</option>
+												<option value="USD">USD - US Dollar</option>
+												<option value="EUR">EUR - Euro</option>
+												<option value="GBP">GBP - British Pound</option>
+												{/* Add more currencies as needed */}
+											</select>
+										</div>
+									</div>
+
+									{/* Show the converted amount in EUR */}
+									{exchangeRates && formData.costPerShare && (
+										<div className="mt-2 text-sm text-gray-600">
+											Equivalent in EUR: {formatCurrency(
+												Number(formData.costPerShare) / exchangeRates[formData.currency] * exchangeRates['EUR']
+											)}
+										</div>
+									)}
+
+									{/* Date */}
+									<div>
+										<label className="block text-sm font-medium text-gray-900 mb-1">
+											Purchase Date
+										</label>
+										<input
+											type="date"
+											required
+											className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+											value={formData.purchaseDate}
+											onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
+										/>
+									</div>
+
+									{/* Notes */}
+									<div>
+										<label className="block text-sm font-medium text-gray-900 mb-1">
+											Notes (Optional)
+										</label>
+										<textarea
+											className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none text-gray-900"
+											value={formData.notes}
+											onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+											placeholder="Add any notes about this position..."
+										/>
+									</div>
+
+									{formError && (
+										<div className="text-red-600 text-sm mt-2 font-medium">
+											{formError}
+										</div>
 									)}
 								</div>
-							)}
 
-							{/* Date */}
-							<div>
-								<label className="block text-sm font-medium text-gray-900 mb-1">
-									Purchase Date
-								</label>
-								<input
-									type="date"
-									required
-									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-									value={formData.purchaseDate}
-									onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
-								/>
-							</div>
-
-							{/* Notes */}
-							<div>
-								<label className="block text-sm font-medium text-gray-900 mb-1">
-									Notes (Optional)
-								</label>
-								<textarea
-									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none text-gray-900"
-									value={formData.notes}
-									onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-									placeholder="Add any notes about this position..."
-								/>
-							</div>
-
-							{formError && (
-								<div className="text-red-600 text-sm mt-2 font-medium">
-									{formError}
+								<div className="mt-6 flex justify-end space-x-3">
+									<button
+										type="button"
+										onClick={() => setShowModal(false)}
+										className="px-4 py-2 text-sm font-medium text-gray-900 hover:text-gray-900 transition-colors"
+									>
+										Cancel
+									</button>
+									<button
+										type="submit"
+										className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+									>
+										Add Position
+									</button>
 								</div>
-							)}
+							</form>
 						</div>
-
-						<div className="mt-6 flex justify-end space-x-3">
-							<button
-								type="button"
-								onClick={() => setShowModal(false)}
-								className="px-4 py-2 text-sm font-medium text-gray-900 hover:text-gray-900 transition-colors"
-							>
-								Cancel
-							</button>
-							<button
-								type="submit"
-								className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-							>
-								Add Position
-							</button>
-						</div>
-					</form>
-				</div>
-			</div>
-		)
-	}
+					</div>
+				)
+			}
 
 		</div >
 	);
