@@ -178,7 +178,7 @@ export async function GET(req) {
 				avgCostPerShare,
 				currentPrice: currentPriceEUR,
 				totalValue: totalValueEUR,
-				totalCost: totalCostEUR, 
+				totalCost: totalCostEUR,
 				totalProfitLoss,
 				percentageReturn,
 				tradingCurrency: 'EUR'
