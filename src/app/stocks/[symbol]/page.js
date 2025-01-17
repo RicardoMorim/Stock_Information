@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Line } from "react-chartjs-2";
-import "chartjs-adapter-date-fns";
 import {
 	Chart as ChartJS,
 	CategoryScale,
@@ -16,6 +15,7 @@ import {
 } from 'chart.js';
 import Image from "next/image";
 import { enUS } from 'date-fns/locale';
+import "chartjs-adapter-date-fns";
 
 // Register Chart.js components
 ChartJS.register(
@@ -202,6 +202,7 @@ export default function StockDetails() {
 					displayFormats: {
 						month: "MMM yyyy",
 					},
+					        tooltipFormat: 'MMM dd, yyyy',
 				},
 				title: {
 					display: true,
