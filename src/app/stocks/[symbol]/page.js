@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Line } from "react-chartjs-2";
-import "chartjs-adapter-date-fns";
 import {
 	Chart as ChartJS,
 	CategoryScale,
@@ -15,6 +14,7 @@ import {
 	TimeScale,
 } from 'chart.js';
 import Image from "next/image";
+import "chartjs-adapter-date-fns";
 
 // Register Chart.js components
 ChartJS.register(

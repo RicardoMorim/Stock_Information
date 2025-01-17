@@ -115,7 +115,6 @@ export async function GET(req) {
 					const assetDetails = await fetchAssetDetails(symbol);
 					const historicalData = await fetchHistoricalData(symbol, isCrypto);
 
-
 					return {
 						symbol,
 						name: assetDetails.name || null,
@@ -142,6 +141,9 @@ export async function GET(req) {
 		const topCryptos = (await processSnapshots(cryptoSnapshots, 'Cryptocurrency', true)).slice(0, 5);
 		const topETFs = (await processSnapshots(etfSnapshots, 'ETF')).slice(0, 5);
 
+		const out = { stocks: topStocks, cryptocurrencies: topCryptos, etfs: topETFs }
+
+		console.table(out)
 		const response = NextResponse.json({
 			success: true,
 			data: {
