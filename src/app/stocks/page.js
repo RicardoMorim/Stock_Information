@@ -2,10 +2,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
+
 import { Line } from "react-chartjs-2";
-import Chart from "chart.js/auto";
 import "chartjs-adapter-date-fns";
 
 export default function Stocks() {
@@ -259,7 +257,6 @@ export default function Stocks() {
 
 	return (
 		<>
-			<Navbar />
 			<div className="container mx-auto p-6">
 				<div className="mb-8">
 					<input
@@ -288,7 +285,6 @@ export default function Stocks() {
 					</div>
 				)}
 			</div>
-			<Footer />
 		</>
 	);
 }

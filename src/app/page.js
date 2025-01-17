@@ -1,9 +1,6 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
-
 export default function Home() {
   const router = useRouter();
 
@@ -17,7 +14,6 @@ export default function Home() {
 
   return (
     <>
-      <Navbar />
       <div className="container mx-auto flex-grow flex items-center justify-center text-white">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">Welcome to My App</h1>
@@ -30,7 +26,6 @@ export default function Home() {
           </a>
         </div>
       </div>
-      <Footer />
     </>
   );
 }
