@@ -2,9 +2,33 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
-
 import { Line } from "react-chartjs-2";
+import {
+	Chart as ChartJS,
+	CategoryScale,
+	LinearScale,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	TimeScale,
+} from 'chart.js';
+import { enUS } from 'date-fns/locale';
 import "chartjs-adapter-date-fns";
+
+// Register Chart.js components
+ChartJS.register(
+	CategoryScale,
+	LinearScale,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	TimeScale
+);
+ChartJS.defaults.locale = enUS;
 
 export default function Stocks() {
 	const router = useRouter();
@@ -41,7 +65,7 @@ export default function Stocks() {
 					vwap: stock.vwap,
 					timestamp: new Date(stock.timestamp),
 					historicalData: stock.historicalData,
-					exchangeShortName: stock.exchangeShortName, 
+					exchangeShortName: stock.exchangeShortName,
 				}));
 
 				const processedCryptos = (data.data.cryptocurrencies || []).map((crypto) => ({
@@ -56,7 +80,7 @@ export default function Stocks() {
 					vwap: crypto.vwap,
 					timestamp: new Date(crypto.timestamp),
 					historicalData: crypto.historicalData,
-					exchangeShortName: crypto.exchangeShortName, 
+					exchangeShortName: crypto.exchangeShortName,
 				}));
 
 				const processedETFs = (data.data.etfs || []).map((etf) => ({
@@ -158,7 +182,41 @@ export default function Stocks() {
 
 	const displayedAssets = searchQuery ? searchResults : assets; // Display all assets when there is no search query
 
+	const chartOptions = {
+		responsive: true,
+		maintainAspectRatio: false,
+		scales: {
+			x: {
+				type: "time",
+				adapters: {
+					date: {
+						locale: enUS
+					}
+				},
+				time: {
+					unit: "month",
+					tooltipFormat: "MMM yyyy",
+					displayFormats: {
+						month: "MMM yyyy",
+					},
+				},
+				title: {
+					display: true,
+					text: "Date",
+				},
+			},
+			y: {
+				beginAtZero: false,
+				title: {
+					display: true,
+					text: "Price",
+				},
+			},
+		},
+	};
+
 	const InitialAssetCard = ({ asset }) => (
+
 		<a href={`/stocks/${asset.symbol}`}>
 			<div className="bg-white rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow">
 				<div className="flex justify-between items-center">
@@ -205,33 +263,7 @@ export default function Stocks() {
 								},
 							],
 						}}
-						options={{
-							responsive: true,
-							maintainAspectRatio: false,
-							scales: {
-								x: {
-									type: "time",
-									time: {
-										unit: "month",
-										tooltipFormat: "MMM yyyy",
-										displayFormats: {
-											month: "MMM yyyy",
-										},
-									},
-									title: {
-										display: true,
-										text: "Date",
-									},
-								},
-								y: {
-									beginAtZero: false,
-									title: {
-										display: true,
-										text: "Price",
-									},
-								},
-							},
-						}}
+						options={chartOptions}
 					/>
 				</div>
 			</div>
