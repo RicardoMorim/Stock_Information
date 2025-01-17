@@ -15,6 +15,7 @@ import {
 	TimeScale,
 } from 'chart.js';
 import Image from "next/image";
+import { enUS } from 'date-fns/locale';
 
 // Register Chart.js components
 ChartJS.register(
@@ -27,7 +28,7 @@ ChartJS.register(
 	Legend,
 	TimeScale
 );
-
+ChartJS.defaults.locale = enUS;
 const getCachedData = (symbol, type) => {
 	try {
 		const data = localStorage.getItem(`stock_${symbol}_${type}`);
