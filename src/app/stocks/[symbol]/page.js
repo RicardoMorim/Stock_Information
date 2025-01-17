@@ -283,7 +283,6 @@ export default function StockDetails() {
 
 			{/* News Section - Only show if data available */}
 			{stockData.dataAvailability?.news ? (
-				// ...existing code...
 				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg">
 					<h3 className="text-lg font-semibold mb-4">Latest News</h3>
 					<div className="grid grid-cols-1 gap-6">
@@ -382,7 +381,6 @@ export default function StockDetails() {
 
 			{/* Fundamentals Section - Only show if data available */}
 			{stockData.dataAvailability?.fundamentals && (
-				// ...existing code...
 				<div className="mt-6 bg-white rounded-lg p-4 shadow-lg text-black">
 					<h3 className="text-lg font-semibold mb-4">Financial Ratios</h3>
 					{fundamentals?.[selectedPeriod] && (

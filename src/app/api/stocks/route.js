@@ -132,7 +132,7 @@ export async function GET(req) {
 						vwap: snapshot.dailyBar?.vw || null,
 						historicalData,
 					};
-					
+
 				})
 			);
 			return assets.sort((a, b) => b.changePercent - a.changePercent);
