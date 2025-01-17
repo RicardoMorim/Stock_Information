@@ -112,47 +112,30 @@ export async function GET(req) {
 		const processSnapshots = async (snapshots, type, isCrypto = false) => {
 			const assets = await Promise.all(
 				Object.entries(isCrypto ? snapshots.snapshots : snapshots).map(async ([symbol, snapshot]) => {
-					try {
-						// Add null checks for all properties
-						const assetDetails = await fetchAssetDetails(symbol);
-						const historicalData = await fetchHistoricalData(symbol, isCrypto);
+					const assetDetails = await fetchAssetDetails(symbol);
+					const historicalData = await fetchHistoricalData(symbol, isCrypto);
 
-						// Ensure snapshot and its properties exist
-						if (!snapshot || !snapshot.latestTrade || !snapshot.dailyBar || !snapshot.prevDailyBar) {
-							console.log(`Missing data for ${symbol}:`, snapshot);
-							return null;
-						}
 
-						const price = snapshot.latestTrade?.p || 0;
-						const dailyClose = snapshot.dailyBar?.c || 0;
-						const prevClose = snapshot.prevDailyBar?.c || 0;
-
-						console.table(snapshot)
-
-						return {
-							symbol,
-							name: assetDetails.name || symbol,
-							type,
-							currency: assetDetails.currency || null,
-							price: price || 0,
-							changePercent: prevClose ? ((dailyClose - prevClose) / prevClose) * 100 : 0,
-							high: snapshot.dailyBar?.h || price,
-							low: snapshot.dailyBar?.l || price,
-							volume: snapshot.dailyBar?.v || 0,
-							vwap: snapshot.dailyBar?.vw || price,
-							historicalData,
-						};
-					} catch (error) {
-						console.error(`Error processing ${symbol}:`, error);
-						return null;
-					}
+					return {
+						symbol,
+						name: assetDetails.name || null,
+						type,
+						currency: assetDetails.currency || null,
+						price: snapshot.latestTrade?.p || null,
+						changePercent:
+							snapshot.dailyBar && snapshot.prevDailyBar
+								? ((snapshot.dailyBar.c - snapshot.prevDailyBar.c) / snapshot.prevDailyBar.c) * 100
+								: null,
+						high: snapshot.dailyBar?.h || null,
+						low: snapshot.dailyBar?.l || null,
+						volume: snapshot.dailyBar?.v || null,
+						vwap: snapshot.dailyBar?.vw || null,
+						historicalData,
+					};
+					
 				})
 			);
-
-			// Filter out null values and sort
-			return assets
-				.filter(asset => asset !== null)
-				.sort((a, b) => b.changePercent - a.changePercent);
+			return assets.sort((a, b) => b.changePercent - a.changePercent);
 		};
 
 		const topStocks = (await processSnapshots(stockSnapshots, 'Stock')).slice(0, 10);

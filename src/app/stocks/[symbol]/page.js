@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Line } from "react-chartjs-2";
+import "chartjs-adapter-date-fns";
 import {
 	Chart as ChartJS,
 	CategoryScale,
@@ -14,8 +15,6 @@ import {
 	TimeScale,
 } from 'chart.js';
 import Image from "next/image";
-import { enUS } from 'date-fns/locale';
-import "chartjs-adapter-date-fns";
 
 // Register Chart.js components
 ChartJS.register(
@@ -28,7 +27,7 @@ ChartJS.register(
 	Legend,
 	TimeScale
 );
-ChartJS.defaults.locale = enUS;
+
 const getCachedData = (symbol, type) => {
 	try {
 		const data = localStorage.getItem(`stock_${symbol}_${type}`);
@@ -202,7 +201,6 @@ export default function StockDetails() {
 					displayFormats: {
 						month: "MMM yyyy",
 					},
-					        tooltipFormat: 'MMM dd, yyyy',
 				},
 				title: {
 					display: true,
