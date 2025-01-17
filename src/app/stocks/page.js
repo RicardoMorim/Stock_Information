@@ -2,33 +2,11 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
-import { Line } from "react-chartjs-2";
-import {
-	Chart as ChartJS,
-	CategoryScale,
-	LinearScale,
-	PointElement,
-	LineElement,
-	Title,
-	Tooltip,
-	Legend,
-	TimeScale,
-} from 'chart.js';
-import { enUS } from 'date-fns/locale';
-import "chartjs-adapter-date-fns";
+import dynamic from 'next/dynamic';
 
-// Register Chart.js components
-ChartJS.register(
-	CategoryScale,
-	LinearScale,
-	PointElement,
-	LineElement,
-	Title,
-	Tooltip,
-	Legend,
-	TimeScale
-);
-ChartJS.defaults.locale = enUS;
+// Dynamically import ApexCharts with no SSR
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+
 
 export default function Stocks() {
 	const router = useRouter();
@@ -183,92 +161,95 @@ export default function Stocks() {
 	const displayedAssets = searchQuery ? searchResults : assets; // Display all assets when there is no search query
 
 	const chartOptions = {
-		responsive: true,
-		maintainAspectRatio: false,
-		scales: {
-			x: {
-				type: "time",
-				adapters: {
-					date: {
-						locale: enUS
-					}
-				},
-				time: {
-					unit: "month",
-					tooltipFormat: "MMM yyyy",
-					displayFormats: {
-						month: "MMM yyyy",
-					},
-				},
-				title: {
-					display: true,
-					text: "Date",
-				},
-			},
-			y: {
-				beginAtZero: false,
-				title: {
-					display: true,
-					text: "Price",
-				},
-			},
+	  chart: {
+		type: 'area',
+		height: 160,
+		sparkline: {
+		  enabled: true
 		},
+		toolbar: {
+		  show: false
+		}
+	  },
+	  stroke: {
+		curve: 'smooth',
+		width: 2
+	  },
+	  fill: {
+		type: 'gradient',
+		gradient: {
+		  shadeIntensity: 1,
+		  opacityFrom: 0.7,
+		  opacityTo: 0.3
+		}
+	  },
+	  xaxis: {
+		type: 'datetime',
+		labels: {
+		  show: false
+		}
+	  },
+	  yaxis: {
+		labels: {
+		  show: false
+		}
+	  },
+	  tooltip: {
+		x: {
+		  format: 'dd MMM yyyy'
+		}
+	  },
+	  colors: ['#38bdf8']
 	};
-
 	const InitialAssetCard = ({ asset }) => (
-
 		<a href={`/stocks/${asset.symbol}`}>
-			<div className="bg-white rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow">
-				<div className="flex justify-between items-center">
-					<div>
-						<h3 className="text-lg font-bold text-black">{asset.symbol}</h3>
-						<p className="text-xs text-gray-500">
-							{new Date().toLocaleString()}
-						</p>
-					</div>
-					<span className="px-2 py-1 bg-navyBlue text-white rounded-full text-sm">
-						{asset.type}
-					</span>
-				</div>
-
-				<div className="mt-2 space-y-1">
-					<p className="text-black text-lg font-semibold">
-						${Number(asset.price).toFixed(2)}
-					</p>
-					<p
-						className={`${asset.change >= 0 ? "text-green-600" : "text-red-600"
-							}`}
-					>
-						{asset.change >= 0 ? "↑" : "↓"} {Math.abs(Number(asset.change)).toFixed(2)}%
-					</p>
-					<div className="text-xs text-gray-600 grid grid-cols-2 gap-2">
-						<p>H: ${Number(asset.high).toFixed(2)}</p>
-						<p>L: ${Number(asset.low).toFixed(2)}</p>
-						<p>Vol: {Number(asset.volume).toLocaleString()}</p>
-						<p>VWAP: ${Number(asset.vwap).toFixed(2)}</p>
-					</div>
-				</div>
-
-				<div className="mt-4">
-					<Line
-						data={{
-							labels: asset.historicalData.map((data) => new Date(data.t)),
-							datasets: [
-								{
-									label: `${asset.symbol} Price`,
-									data: asset.historicalData.map((data) => data.c),
-									borderColor: "rgba(75, 192, 192, 1)",
-									backgroundColor: "rgba(75, 192, 192, 0.2)",
-									fill: true,
-								},
-							],
-						}}
-						options={chartOptions}
-					/>
-				</div>
+		  <div className="bg-white rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow">
+			<div className="flex justify-between items-center">
+			  <div>
+				<h3 className="text-lg font-bold text-black">{asset.symbol}</h3>
+				<p className="text-xs text-gray-500">
+				  {new Date().toLocaleString()}
+				</p>
+			  </div>
+			  <span className="px-2 py-1 bg-navyBlue text-white rounded-full text-sm">
+				{asset.type}
+			  </span>
 			</div>
+	  
+			<div className="mt-2 space-y-1">
+			  <p className="text-black text-lg font-semibold">
+				${Number(asset.price).toFixed(2)}
+			  </p>
+			  <p className={`${asset.change >= 0 ? "text-green-600" : "text-red-600"}`}>
+				{asset.change >= 0 ? "↑" : "↓"} {Math.abs(Number(asset.change)).toFixed(2)}%
+			  </p>
+			  <div className="text-xs text-gray-600 grid grid-cols-2 gap-2">
+				<p>H: ${Number(asset.high).toFixed(2)}</p>
+				<p>L: ${Number(asset.low).toFixed(2)}</p>
+				<p>Vol: {Number(asset.volume).toLocaleString()}</p>
+				<p>VWAP: ${Number(asset.vwap).toFixed(2)}</p>
+			  </div>
+			</div>
+	  
+			<div className="mt-4">
+			  <Chart
+				options={chartOptions}
+				series={[
+				  {
+					name: asset.symbol,
+					data: asset.historicalData.map((data) => ({
+					  x: new Date(data.t),
+					  y: data.c
+					}))
+				  }
+				]}
+				type="area"
+				height={160}
+			  />
+			</div>
+		  </div>
 		</a>
-	);
+	  );
 
 	const SearchResultCard = ({ asset }) => (
 		<a href={`/stocks/${asset.symbol}`}>

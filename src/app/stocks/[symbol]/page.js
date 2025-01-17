@@ -1,32 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Line } from "react-chartjs-2";
-import {
-	Chart as ChartJS,
-	CategoryScale,
-	LinearScale,
-	PointElement,
-	LineElement,
-	Title,
-	Tooltip,
-	Legend,
-	TimeScale,
-} from 'chart.js';
 import Image from "next/image";
-import "chartjs-adapter-date-fns";
+import dynamic from 'next/dynamic';
 
-// Register Chart.js components
-ChartJS.register(
-	CategoryScale,
-	LinearScale,
-	PointElement,
-	LineElement,
-	Title,
-	Tooltip,
-	Legend,
-	TimeScale
-);
+// Dynamically import ApexCharts with no SSR
+const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 const getCachedData = (symbol, type) => {
 	try {
@@ -189,33 +168,84 @@ export default function StockDetails() {
 		],
 	};
 
-	const chartOptions = {
-		responsive: true,
-		maintainAspectRatio: false,
-		scales: {
-			x: {
-				type: "time",
-				time: {
-					unit: "month",
-					tooltipFormat: "MMM yyyy",
-					displayFormats: {
-						month: "MMM yyyy",
-					},
-				},
-				title: {
-					display: true,
-					text: "Date",
-				},
-			},
-			y: {
-				beginAtZero: false,
-				title: {
-					display: true,
-					text: "Price",
-				},
-			},
+	const priceChartOptions = {
+		chart: {
+		  type: 'area',
+		  height: 400,
+		  toolbar: {
+			show: true
+		  }
 		},
-	};
+		stroke: {
+		  curve: 'smooth',
+		  width: 2
+		},
+		fill: {
+		  type: 'gradient',
+		  gradient: {
+			shadeIntensity: 1,
+			opacityFrom: 0.7,
+			opacityTo: 0.3
+		  }
+		},
+		xaxis: {
+		  type: 'datetime',
+		  title: {
+			text: 'Date'
+		  }
+		},
+		yaxis: {
+		  title: {
+			text: 'Price ($)'
+		  }
+		},
+		tooltip: {
+		  x: {
+			format: 'dd MMM yyyy'
+		  }
+		},
+		colors: ['#4ade80']
+	  };
+
+
+	  const metricsChartOptions = {
+		chart: {
+		  type: 'line',
+		  height: 400,
+		  toolbar: {
+			show: true
+		  }
+		},
+		stroke: {
+		  curve: 'smooth',
+		  width: 2
+		},
+		xaxis: {
+		  type: 'datetime',
+		  title: {
+			text: 'Date'
+		  }
+		},
+		yaxis: [
+		  {
+			title: {
+			  text: 'Price ($)'
+			}
+		  },
+		  {
+			opposite: true,
+			title: {
+			  text: 'Volume'
+			}
+		  }
+		],
+		tooltip: {
+		  shared: true,
+		  x: {
+			format: 'dd MMM yyyy'
+		  }
+		}
+	  };
 
 	return (
 		<div className="container mx-auto p-6">
@@ -268,12 +298,23 @@ export default function StockDetails() {
 
 			{/* Historical Data Chart - Only show if data available */}
 			{stockData.dataAvailability?.historical ? (
-				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
-					<h2 className="text-xl font-semibold mb-4">Price History</h2>
-					<div style={{ height: '400px' }}>
-						<Line data={chartData} options={chartOptions} />
-					</div>
+			<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
+				<h2 className="text-xl font-semibold mb-4">Price History</h2>
+				<div style={{ height: '400px' }}>
+				<Chart
+					options={priceChartOptions}
+					series={[{
+					name: symbol,
+					data: historicalData?.data?.map(data => ({
+						x: new Date(data.t),
+						y: data.c
+					})) || []
+					}]}
+					type="area"
+					height={400}
+				/>
 				</div>
+			</div>
 			) : (
 				<div className="bg-white rounded-lg p-6 shadow-lg mb-6">
 					<h2 className="text-xl font-semibold mb-4">Price History</h2>
@@ -711,85 +752,48 @@ export default function StockDetails() {
 
 				{/* Chart */}
 				<div style={{ height: "400px" }}>
-					<Line
-						data={{
-							labels: historicalData?.data?.map(data => new Date(data.t)),
-							datasets: [
-								{
-									label: 'Open',
-									data: historicalData?.data?.map(data => data.o),
-									borderColor: 'rgb(75, 192, 192)',
-									tension: 0.1
-								},
-								{
-									label: 'High',
-									data: historicalData?.data?.map(data => data.h),
-									borderColor: 'rgb(54, 162, 235)',
-									tension: 0.1
-								},
-								{
-									label: 'Low',
-									data: historicalData?.data?.map(data => data.l),
-									borderColor: 'rgb(255, 99, 132)',
-									tension: 0.1
-								},
-								{
-									label: 'Close',
-									data: historicalData?.data?.map(data => data.c),
-									borderColor: 'rgb(153, 102, 255)',
-									tension: 0.1
-								},
-								{
-									label: 'Volume',
-									data: historicalData?.data?.map(data => data.v),
-									borderColor: 'rgb(255, 159, 64)',
-									tension: 0.1,
-									yAxisID: 'volume'
-								}
-							]
-						}}
-						options={{
-							responsive: true,
-							maintainAspectRatio: false,
-							interaction: {
-								mode: 'index',
-								intersect: false,
-							},
-							scales: {
-								x: {
-									type: 'time',
-									time: {
-										unit: 'month',
-										tooltipFormat: 'MMM yyyy'
-									},
-									title: {
-										display: true,
-										text: 'Date'
-									}
-								},
-								y: {
-									type: 'linear',
-									display: true,
-									position: 'left',
-									title: {
-										display: true,
-										text: 'Price ($)'
-									}
-								},
-								volume: {
-									type: 'linear',
-									display: true,
-									position: 'right',
-									title: {
-										display: true,
-										text: 'Volume'
-									},
-									grid: {
-										drawOnChartArea: false
-									}
-								}
-							}
-						}}
+					<Chart
+					options={metricsChartOptions}
+					series={[
+						{
+						name: 'Open',
+						data: historicalData?.data?.map(data => ({
+							x: new Date(data.t),
+							y: data.o
+						})) || []
+						},
+						{
+						name: 'High',
+						data: historicalData?.data?.map(data => ({
+							x: new Date(data.t),
+							y: data.h
+						})) || []
+						},
+						{
+						name: 'Low',
+						data: historicalData?.data?.map(data => ({
+							x: new Date(data.t),
+							y: data.l
+						})) || []
+						},
+						{
+						name: 'Close',
+						data: historicalData?.data?.map(data => ({
+							x: new Date(data.t),
+							y: data.c
+						})) || []
+						},
+						{
+						name: 'Volume',
+						data: historicalData?.data?.map(data => ({
+							x: new Date(data.t),
+							y: data.v
+						})) || [],
+						yAxisIndex: 1
+						}
+					]}
+					type="line"
+					height={400}
 					/>
 				</div>
 			</div>
