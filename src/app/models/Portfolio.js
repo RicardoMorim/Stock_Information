@@ -42,6 +42,8 @@ const portfolioSchema = new mongoose.Schema({
     }]
 }, { timestamps: true });
 
+portfolioSchema.index({ userId: 1 }); 
+
 // Middleware to validate costInEUR
 portfolioSchema.pre('save', function(next) {
     this.holdings.forEach((holding) => {

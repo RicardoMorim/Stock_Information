@@ -294,50 +294,9 @@ export async function POST(req) {
 		console.log('Portfolio to save:', JSON.stringify(portfolio, null, 2));
 		await portfolio.save();
 
-		// Process holdings for response
-		const holdingsBySymbol = {};
-		portfolio.holdings.forEach(holding => {
-			const symbol = holding.symbol;
-			holdingsBySymbol[symbol] = {
-				symbol,
-				totalShares: holding.shares,
-				costInEUR: holding.costInEUR,
-				tradingCurrency: holding.tradingCurrency
-			};
-		});
-
-		// Get current prices and calculate metrics
-		const symbols = Object.keys(holdingsBySymbol);
-		const prices = await fetchStockPrices(symbols);
-
-		const aggregatedHoldings = symbols.map(symbol => {
-			const holding = holdingsBySymbol[symbol];
-			const currentPriceUSD = prices[symbol] || 0;
-			const currentPriceEUR = exchangeRates ?
-				(currentPriceUSD * exchangeRates['EUR']) : 0;
-
-			const totalValueEUR = holding.totalShares * currentPriceEUR;
-			const totalCostEUR = holding.totalShares * holding.costInEUR;
-			const totalProfitLoss = totalValueEUR - totalCostEUR;
-			const percentageReturn = totalCostEUR > 0 ?
-				(totalProfitLoss / totalCostEUR) * 100 : 0;
-
-			return {
-				symbol,
-				totalShares: holding.totalShares,
-				avgCostPerShare: holding.costInEUR,
-				currentPrice: currentPriceEUR,
-				totalValue: totalValueEUR,
-				totalProfitLoss,
-				percentageReturn,
-				currency: 'EUR'
-			};
-		});
-
 		return NextResponse.json({
 			success: true,
-			message: 'Position added successfully',
-			data: aggregatedHoldings
+			message: 'Position added successfully'
 		});
 
 	} catch (error) {

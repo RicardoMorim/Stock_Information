@@ -257,54 +257,9 @@ export async function DELETE(req, { params }) {
 
 		await portfolio.save();
 
-		// Recalculate portfolio data for response
-		const holdingsBySymbol = {};
-		portfolio.holdings.forEach(h => {
-			const sym = h.symbol;
-			if (!holdingsBySymbol[sym]) {
-				holdingsBySymbol[sym] = {
-					symbol: sym,
-					totalShares: 0,
-					costInEUR: h.costInEUR,
-					tradingCurrency: h.tradingCurrency
-				};
-			}
-			holdingsBySymbol[sym].totalShares += h.shares;
-		});
-
-		// Get current prices
-		const symbols = Object.keys(holdingsBySymbol);
-		const prices = await fetchStockPrices(symbols);
-		const exchangeRates = await getExchangeRates();
-
-		const aggregatedHoldings = symbols.map(sym => {
-			const h = holdingsBySymbol[sym];
-			const currentPriceUSD = prices[sym]?.price || 0;
-			const currentPriceEUR = exchangeRates ?
-				(currentPriceUSD * exchangeRates['EUR']) : 0;
-
-			const totalValue = h.totalShares * currentPriceEUR;
-			const totalCost = h.totalShares * h.costInEUR;
-			const totalProfitLoss = totalValue - totalCost;
-			const percentageReturn = totalCost > 0 ?
-				(totalProfitLoss / totalCost) * 100 : 0;
-
-			return {
-				symbol: sym,
-				totalShares: h.totalShares,
-				avgCostPerShare: h.costInEUR,
-				currentPrice: currentPriceEUR,
-				totalValue,
-				totalProfitLoss,
-				percentageReturn,
-				tradingCurrency: 'EUR'
-			};
-		});
-
 		return NextResponse.json({
 			success: true,
-			message: 'Position sold successfully',
-			data: aggregatedHoldings
+			message: 'Position sold successfully'
 		});
 
 	} catch (error) {

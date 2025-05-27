@@ -1,303 +1,161 @@
 "use client";
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import Fuse from "fuse.js";
-import dynamic from 'next/dynamic';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-// Dynamically import ApexCharts with no SSR
-const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
+// Import new components
+import StocksPageSkeleton from '@/app/components/Stock/StocksPageSkeleton';
+import StockSearchBar from '@/app/components/Stock/StockSearchBar';
+import StockCard from '@/app/components/Stock/StockCard';
+import Pagination from '@/app/components/Stock/Pagination';
 
+const ITEMS_PER_PAGE = 12; // Number of stocks to display per page
 
-export default function Stocks() {
-	const router = useRouter();
-	const [assets, setAssets] = useState([]);
-	const [allAssets, setAllAssets] = useState([]);
-	const [searchQuery, setSearchQuery] = useState("");
-	const [searchResults, setSearchResults] = useState([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [isSearching, setIsSearching] = useState(false);
+export default function StocksPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-	useEffect(() => {
-		const token = localStorage.getItem("token");
-		if (!token) {
-			router.push("/login");
-			return;
-		}
+  const [mainStocksData, setMainStocksData] = useState([]); // For initially displayed cards with full data
+  const [searchableList, setSearchableList] = useState([]); // For search functionality (symbol, name)
+  const [filteredSearchableList, setFilteredSearchableList] = useState([]); // For paginated display of search results
 
-		const fetchInitialAssets = async () => {
-			try {
-				const response = await fetch("/api/stocks");
-				if (!response.ok) throw new Error("Failed to fetch assets");
-				const data = await response.json();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const initialQuery = searchParams.get('query') || '';
+  const initialPage = parseInt(searchParams.get('page'), 10) || 1;
 
-				// Process stocks, cryptos, and ETFs
-				const processedStocks = (data.data.stocks || []).map((stock) => ({
-					symbol: stock.symbol,
-					name: stock.name,
-					type: stock.type,
-					price: stock.price,
-					change: stock.changePercent,
-					high: stock.high,
-					low: stock.low,
-					volume: stock.volume,
-					vwap: stock.vwap,
-					timestamp: new Date(stock.timestamp),
-					historicalData: stock.historicalData,
-					exchangeShortName: stock.exchangeShortName,
-				}));
+  const [searchTerm, setSearchTerm] = useState(initialQuery);
+  const [currentPage, setCurrentPage] = useState(initialPage);
 
-				const processedCryptos = (data.data.cryptocurrencies || []).map((crypto) => ({
-					symbol: crypto.symbol,
-					name: crypto.name,
-					type: crypto.type,
-					price: crypto.price,
-					change: crypto.changePercent,
-					high: crypto.high,
-					low: crypto.low,
-					volume: crypto.volume,
-					vwap: crypto.vwap,
-					timestamp: new Date(crypto.timestamp),
-					historicalData: crypto.historicalData,
-					exchangeShortName: crypto.exchangeShortName,
-				}));
+  // Fetch initial data (main stocks with details + full searchable list)
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        // This single endpoint will provide both main stocks data and the full searchable list
+        const response = await fetch('/api/stocks'); 
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch initial stock data');
+        }
+        const data = await response.json();
+        if (data.success && data.data) {
+          setMainStocksData(data.data.mainStocksData || []);
+          setSearchableList(data.data.searchableList || []);
+        } else {
+          throw new Error(data.message || 'Could not retrieve initial stock data');
+        }
+      } catch (err) {
+        console.error("Error fetching initial stock data:", err);
+        setError(err.message);
+        setMainStocksData([]);
+        setSearchableList([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchInitialData();
+  }, []);
 
-				const processedETFs = (data.data.etfs || []).map((etf) => ({
-					symbol: etf.symbol,
-					name: etf.name,
-					type: etf.type,
-					price: etf.price,
-					change: etf.changePercent,
-					high: etf.high,
-					low: etf.low,
-					volume: etf.volume,
-					vwap: etf.vwap,
-					timestamp: new Date(etf.timestamp),
-					historicalData: etf.historicalData,
-					exchangeShortName: etf.exchangeShortName, // Include exchangeShortName
-				}));
+  // Update URL when searchTerm or currentPage changes
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchTerm) {
+      params.set('query', searchTerm);
+    }
+    // Only add page to URL if searching (not for initial main stocks display)
+    if (searchTerm && currentPage > 1) {
+      params.set('page', currentPage.toString());
+    }
+    // Use router.push to ensure re-render if only query params change, replace might not always trigger it.
+    router.push(`/stocks?${params.toString()}`, { scroll: false });
+  }, [searchTerm, currentPage, router]);
 
-				const allAssets = [...processedStocks, ...processedCryptos, ...processedETFs];
+  // Memoized filtering for search results
+  const searchResultsPaginated = useMemo(() => {
+    if (!searchTerm) {
+      setFilteredSearchableList([]); // Clear if no search term
+      return [];
+    }
+    const lowercasedFilter = searchTerm.toLowerCase();
+    const filtered = searchableList.filter(stock =>
+      (stock.symbol?.toLowerCase().includes(lowercasedFilter)) ||
+      (stock.name?.toLowerCase().includes(lowercasedFilter))
+    );
+    setFilteredSearchableList(filtered); // Update for totalPages calculation
 
-				// Cache the assets in localStorage
-				localStorage.setItem("assets", JSON.stringify(allAssets));
+    const firstPageIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const lastPageIndex = firstPageIndex + ITEMS_PER_PAGE;
+    return filtered.slice(firstPageIndex, lastPageIndex);
+  }, [searchableList, searchTerm, currentPage]);
 
-				// Set state
-				setAssets(allAssets);
-				setIsLoading(false);
-			} catch (error) {
-				console.error("Error fetching assets:", error);
-				setIsLoading(false);
-			}
-		};
+  const handleSearch = useCallback((query) => {
+    setSearchTerm(query);
+    setCurrentPage(1); // Reset to first page on new search
+  }, []);
 
-		fetchInitialAssets();
+  const handlePageChange = useCallback((pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
-		// Preload all assets (companies)
-		const preloadAllAssets = async () => {
-			try {
-				const response = await fetch("/api/stocks/allStocks");
-				if (!response.ok) throw new Error("Failed to fetch companies");
-				const data = await response.json();
-				const processedCompanies = data.data.map((company) => ({
-					symbol: company.symbol,
-					name: company.name,
-					type: company.type,
-					exchangeShortName: company.exchangeShortName, // Include exchangeShortName
-				}));
-				setAllAssets(processedCompanies);
-			} catch (error) {
-				console.error("Error preloading companies:", error);
-			}
-		};
+  if (isLoading) {
+    return <StocksPageSkeleton />;
+  }
 
-		preloadAllAssets();
-	}, [router]);
+  if (error) {
+    return (
+      <div className="container mx-auto p-6 bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center">
+        <p className="text-2xl text-red-500 mb-4">Error: {error}</p>
+        <p className="text-gray-400 mb-6">Could not load stock data. Please try again later.</p>
+        <button
+          onClick={() => router.push('/')}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+        >
+          Go to Homepage
+        </button>
+      </div>
+    );
+  }
 
-	const fuse = useMemo(() => {
-		return new Fuse(allAssets, {
-			keys: ["symbol", "name"],
-			threshold: 0.3,
-		});
-	}, [allAssets]);
+  // Determine what to display: initial main stocks or search results
+  const displayData = searchTerm ? searchResultsPaginated : mainStocksData;
+  const totalPages = searchTerm ? Math.ceil(filteredSearchableList.length / ITEMS_PER_PAGE) : 0; // Pagination only for search
 
-	const debounce = (func, delay) => {
-		let timeout;
-		return (...args) => {
-			clearTimeout(timeout);
-			timeout = setTimeout(() => func(...args), delay);
-		};
-	};
+  return (
+    <div className="container mx-auto p-4 md:p-6 bg-gray-900 text-white min-h-screen">
+      <header className="mb-8 text-center">
+        <h1 className="text-4xl md:text-5xl font-bold text-blue-400">Explore Stocks</h1>
+        <p className="text-lg md:text-xl text-gray-400 mt-2">Find your next investment opportunity.</p>
+      </header>
 
-	const handleSearch = useCallback(
-		debounce((query) => {
-			setSearchQuery(query);
-			if (!query) {
-				setSearchResults([]);
-				return;
-			}
-			setIsSearching(true);
+      <StockSearchBar onSearch={handleSearch} initialQuery={searchTerm} />
 
-			// Check if search results are cached
-			const cachedSearchResults = localStorage.getItem(`searchResults_${query}`);
-			if (cachedSearchResults) {
-				setSearchResults(JSON.parse(cachedSearchResults));
-				setIsSearching(false);
-				return;
-			}
+      {displayData.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+          {displayData.map((stock) => (
+            <StockCard key={stock.symbol} stock={stock} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-10">
+          {searchTerm ? (
+            <p className="text-xl text-gray-500">No stocks found matching your criteria: &quot;{searchTerm}&quot;.</p>
+          ) : (
+            <p className="text-xl text-gray-500">No featured stocks available at the moment.</p> // Message if mainStocksData is empty and no search
+          )}
+        </div>
+      )}
 
-			// Perform search
-			const results = fuse.search(query).slice(0, 100).map((result) => result.item);
-
-			// Cache the search results
-			localStorage.setItem(`searchResults_${query}`, JSON.stringify(results));
-
-			setSearchResults(results);
-			setIsSearching(false);
-		}, 200),
-		[debounce, setSearchQuery, setSearchResults, setIsSearching, fuse]
-	);
-
-
-	const displayedAssets = searchQuery ? searchResults : assets; // Display all assets when there is no search query
-
-	const chartOptions = {
-	  chart: {
-		type: 'area',
-		height: 160,
-		sparkline: {
-		  enabled: true
-		},
-		toolbar: {
-		  show: false
-		}
-	  },
-	  stroke: {
-		curve: 'smooth',
-		width: 2
-	  },
-	  fill: {
-		type: 'gradient',
-		gradient: {
-		  shadeIntensity: 1,
-		  opacityFrom: 0.7,
-		  opacityTo: 0.3
-		}
-	  },
-	  xaxis: {
-		type: 'datetime',
-		labels: {
-		  show: false
-		}
-	  },
-	  yaxis: {
-		labels: {
-		  show: false
-		}
-	  },
-	  tooltip: {
-		x: {
-		  format: 'dd MMM yyyy'
-		}
-	  },
-	  colors: ['#38bdf8']
-	};
-	const InitialAssetCard = ({ asset }) => (
-		<a href={`/stocks/${asset.symbol}`}>
-		  <div className="bg-white rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow">
-			<div className="flex justify-between items-center">
-			  <div>
-				<h3 className="text-lg font-bold text-black">{asset.symbol}</h3>
-				<p className="text-xs text-gray-500">
-				  {new Date().toLocaleString()}
-				</p>
-			  </div>
-			  <span className="px-2 py-1 bg-navyBlue text-white rounded-full text-sm">
-				{asset.type}
-			  </span>
-			</div>
-	  
-			<div className="mt-2 space-y-1">
-			  <p className="text-black text-lg font-semibold">
-				${Number(asset.price).toFixed(2)}
-			  </p>
-			  <p className={`${asset.change >= 0 ? "text-green-600" : "text-red-600"}`}>
-				{asset.change >= 0 ? "↑" : "↓"} {Math.abs(Number(asset.change)).toFixed(2)}%
-			  </p>
-			  <div className="text-xs text-gray-600 grid grid-cols-2 gap-2">
-				<p>H: ${Number(asset.high).toFixed(2)}</p>
-				<p>L: ${Number(asset.low).toFixed(2)}</p>
-				<p>Vol: {Number(asset.volume).toLocaleString()}</p>
-				<p>VWAP: ${Number(asset.vwap).toFixed(2)}</p>
-			  </div>
-			</div>
-	  
-			<div className="mt-4">
-			  <Chart
-				options={chartOptions}
-				series={[
-				  {
-					name: asset.symbol,
-					data: asset.historicalData.map((data) => ({
-					  x: new Date(data.t),
-					  y: data.c
-					}))
-				  }
-				]}
-				type="area"
-				height={160}
-			  />
-			</div>
-		  </div>
-		</a>
-	  );
-
-	const SearchResultCard = ({ asset }) => (
-		<a href={`/stocks/${asset.symbol}`}>
-			<div className="bg-white rounded-lg p-4 shadow-lg hover:shadow-xl transition-shadow">
-				<div className="flex justify-between items-center">
-					<div>
-						<h3 className="text-lg font-bold text-black">{asset.symbol}</h3>
-						<p className="text-sm text-gray-500">{asset.name}</p>
-						<p className="text-xs text-gray-400">{asset.exchangeShortName}</p>
-					</div>
-					<span className="px-2 py-1 bg-navyBlue text-white rounded-full text-sm">
-						{asset.type}
-					</span>
-				</div>
-			</div>
-		</a>
-	);
-
-	return (
-		<>
-			<div className="container mx-auto p-6">
-				<div className="mb-8">
-					<input
-						type="text"
-						placeholder="Search for any asset..."
-						onChange={(e) => handleSearch(e.target.value)}
-						className="w-full p-3 rounded-lg border border-navyBlue bg-white text-black"
-					/>
-				</div>
-
-				{isLoading ? (
-					<div className="text-center">Loading...</div>
-				) : isSearching ? (
-					<div className="text-center">Searching...</div>
-				) : searchQuery ? (
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-						{searchResults.map((asset) => (
-							<SearchResultCard key={asset.symbol} asset={asset} />
-						))}
-					</div>
-				) : (
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-						{displayedAssets.map((asset) => (
-							<InitialAssetCard key={asset.symbol} asset={asset} />
-						))}
-					</div>
-				)}
-			</div>
-		</>
-	);
+      {/* Show pagination only when there is a search term and multiple pages */}
+      {searchTerm && totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </div>
+  );
 }
