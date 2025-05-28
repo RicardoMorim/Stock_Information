@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { polygonClient, fetchPolygonRecentHistoricalData } from "@/app/utils/polygon";
 import alpaca, { getAlpacaHistoricalBars, getAlpacaSnapshots } from "@/app/utils/alpaca";
 import { getAlphaVantageHistoricalDaily, getAlphaVantageDigitalCurrencyDaily } from "@/app/utils/alphaVantage"; // Added Alpha Vantage import
+import { getYahooFinanceHistoricalData } from "@/app/utils/yahooFinance"; // Import Yahoo Finance
 
 // In-memory cache
 let mainStocksCache = {
@@ -123,23 +124,38 @@ async function fetchMainStocksData() {
                         miniChartData = avStockData;
                         console.log(`[Stock MiniChart] Alpha Vantage success for ${symbol}: ${miniChartData.length} points.`);
                     } else {
-                        console.warn(`[Stock MiniChart] Alpha Vantage for ${symbol} gave ${avPoints} points. Using best available for ${symbol}.`);
-                        // Select the best of the three, even if less than MIN_POINTS_STOCK
-                        if (alpacaPoints >= polygonPoints && alpacaPoints >= avPoints && alpacaPoints > 0) {
-                            miniChartData = alpacaStockData;
-                        } else if (polygonPoints > alpacaPoints && polygonPoints >= avPoints && polygonPoints > 0) { // check polygon only if it's strictly better than alpaca
-                            miniChartData = polygonStockData;
-                        } else if (avPoints > 0) { // Check AV if it has any points and others were worse or zero
-                             miniChartData = avStockData;
-                        } else {
-                            miniChartData = alpacaStockData && alpacaPoints > 0 ? alpacaStockData : (polygonStockData && polygonPoints > 0 ? polygonStockData : []); // Default to alpaca if it had data, else polygon, else empty
-                        }
+                        console.warn(`[Stock MiniChart] Alpha Vantage for ${symbol} gave ${avPoints} points. Trying Yahoo Finance.`);
                         
-                        if (miniChartData && miniChartData.length > 0) {
-                             console.log(`[Stock MiniChart] Best available for ${symbol} (from fallbacks) has ${miniChartData.length} points.`);
+                        // 4. Try Yahoo Finance for stocks
+                        let yahooStockData = await getYahooFinanceHistoricalData(symbol, DAYS_TO_FETCH_STOCK);
+                        let yahooPoints = yahooStockData ? yahooStockData.length : 0;
+
+                        if (yahooStockData && yahooPoints >= MIN_POINTS_STOCK) {
+                            miniChartData = yahooStockData;
+                            console.log(`[Stock MiniChart] Yahoo Finance success for ${symbol}: ${miniChartData.length} points.`);
                         } else {
-                             console.log(`[Stock MiniChart] No chart data found for ${symbol} after all fallbacks.`);
-                             miniChartData = []; 
+                            console.warn(`[Stock MiniChart] Yahoo Finance for ${symbol} gave ${yahooPoints} points. Using best available for ${symbol}.`);
+                            // Select the best of the four, even if less than MIN_POINTS_STOCK
+                            if (alpacaPoints >= polygonPoints && alpacaPoints >= avPoints && alpacaPoints >= yahooPoints && alpacaPoints > 0) {
+                                miniChartData = alpacaStockData;
+                            } else if (polygonPoints > alpacaPoints && polygonPoints >= avPoints && polygonPoints >= yahooPoints && polygonPoints > 0) {
+                                miniChartData = polygonStockData;
+                            } else if (avPoints > alpacaPoints && avPoints > polygonPoints && avPoints >= yahooPoints && avPoints > 0) {
+                                 miniChartData = avStockData;
+                            } else if (yahooPoints > 0) {
+                                 miniChartData = yahooStockData;
+                            } else {
+                                miniChartData = alpacaStockData && alpacaPoints > 0 ? alpacaStockData : 
+                                                (polygonStockData && polygonPoints > 0 ? polygonStockData : 
+                                                (avStockData && avPoints > 0 ? avStockData : [])); // Default to best available or empty
+                            }
+                            
+                            if (miniChartData && miniChartData.length > 0) {
+                                 console.log(`[Stock MiniChart] Best available for ${symbol} (from fallbacks) has ${miniChartData.length} points.`);
+                            } else {
+                                 console.log(`[Stock MiniChart] No chart data found for ${symbol} after all fallbacks.`);
+                                 miniChartData = []; 
+                            }
                         }
                     }
                 }
@@ -318,42 +334,61 @@ async function fetchSearchableList() {
     searchableListCache.data &&
     now - searchableListCache.lastFetched < CACHE_DURATION
   ) {
-    console.log("Serving searchable list from cache.");
+    console.log("[SearchableList] Serving searchable list from cache.");
     return searchableListCache.data;
   }
-  console.log("Fetching searchable list from Alpaca API.");
+  console.log("[SearchableList] Fetching searchable list from internal /api/stocks/allStocks endpoint.");
 
   try {
-    // Fetch active US equities and crypto assets
-    const stockAssets = await alpaca.getAssets({
-      status: "active",
-      asset_class: "us_equity",
-    });
-    const cryptoAssets = await alpaca.getAssets({
-      status: "active",
-      asset_class: "crypto",
-    });
+    // Fetch from your MongoDB via the internal API endpoint
+    // Assuming your dev server is running on localhost:3000 or the appropriate base URL for server-side fetch
+    const internalApiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'; // Ensure this env var is set or adjust
+    const response = await fetch(`${internalApiUrl}/api/stocks/allStocks`);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("[SearchableList] Error fetching from /api/stocks/allStocks:", response.status, errorData.message);
+      throw new Error(`Failed to fetch from /api/stocks/allStocks: ${errorData.message || response.statusText}`);
+    }
+    
+    const result = await response.json();
 
-    const combinedAssets = [...stockAssets, ...cryptoAssets];
-    const formattedAssets = combinedAssets.map((asset) => ({
-      symbol: asset.symbol,
-      name: asset.name,
-      // You could add more details here if needed by StockCard when displaying search results
-      // e.g., type: asset.asset_class === 'crypto' ? 'Crypto' : (asset.tradable ? 'Stock/ETF' : 'Other')
+    if (!result.success || !Array.isArray(result.data)) {
+        console.error("[SearchableList] /api/stocks/allStocks did not return successful data array:", result);
+        throw new Error("Invalid data format from /api/stocks/allStocks");
+    }
+
+    const formattedAssets = result.data.map((asset) => ({
+      symbol: asset.symbol, // Assuming your Stock model has 'symbol'
+      name: asset.name,     // Assuming your Stock model has 'name'
+      // Include other fields that might be useful for display or filtering if available
+      exchangeShortName: asset.exchangeShortName,
+      type: asset.type,
+      country: asset.country,
+      marketIdentifier: asset.marketIdentifier
     }));
+
+    console.log(`[SearchableList] Fetched ${formattedAssets.length} assets from MongoDB.`);
+    if (formattedAssets.length > 0) {
+        console.log("[SearchableList] Sample of first 5 assets from MongoDB:", formattedAssets.slice(0,5));
+    }
 
     searchableListCache = { data: formattedAssets, lastFetched: now };
     return formattedAssets;
   } catch (error) {
     console.error(
-      "Error fetching searchable list from Alpaca:",
+      "[SearchableList] Error in fetchSearchableList function:",
       error.message || error.toString()
     );
+    // Fallback to stale cache if available on error
     if (searchableListCache.data) {
-      console.warn("Serving stale searchable list due to fetch error.");
+      console.warn("[SearchableList] Serving stale searchable list due to fetch error.");
       return searchableListCache.data;
     }
-    throw new Error("Failed to fetch searchable asset list.");
+    // If no cache and error, rethrow or return empty to prevent breaking the page
+    // For now, rethrowing to make it clear there was an issue.
+    // Consider returning [] if you prefer the page to load with no search results on error.
+    throw new Error(`Failed to fetch searchable asset list: ${error.message}`);
   }
 }
 

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/app/utils/db";
 import Stock from "@/app/models/Stock";
-import { fetchAlphaVantageNews, fetchAlphaVantageStockData } from "@/app/utils/alphaVantage";
+import { fetchAlphaVantageNews, fetchAlphaVantageStockData, getAlphaVantageHistoricalDaily } from "@/app/utils/alphaVantage"; // Added getAlphaVantageHistoricalDaily
 import { getPolygonSnapshot, fetchPolygonNews, fetchPolygonHistoricalData } from "@/app/utils/polygon"; // Import Polygon utility
+import { getYahooFinanceHistoricalData, getYahooFinanceNews } from "@/app/utils/yahooFinance"; // Import Yahoo Finance utils
 
 const POLYGON_API_KEY = process.env.POLYGON_KEY;
 const ALPACA_API_KEY = process.env.ALPACA_KEY;
@@ -229,66 +230,132 @@ export async function GET(req, { params }) {
     };
 
     const fetchHistoricalData = async (symbol, isCrypto = false) => {
+      let historicalData = [];
+      let source = 'N/A';
+      const to = new Date(); // Use current date for 'to'
+      // For 'from', let's aim for roughly 1 year of data, but Yahoo takes 'daysToFetch'
+      const daysToFetchForChart = 365; 
+
+      // 1. Try Polygon.io
       try {
-        // Try Polygon.io first
-        console.log(`Attempting to fetch historical data from Polygon.io for ${symbol}`);
-        const to = new Date().toISOString().split('T')[0];
-        const from = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0];
-        const polygonHistorical = await fetchPolygonHistoricalData(symbol, from, to, 'day', 1);
+        console.log(`[Chart Data] Attempting Polygon.io for ${symbol}`);
+        const fromPolygon = new Date(new Date().setFullYear(to.getFullYear() - 1)).toISOString().split('T')[0];
+        const toPolygon = to.toISOString().split('T')[0];
+        const polygonHistorical = await fetchPolygonHistoricalData(symbol, fromPolygon, toPolygon, 'day', 1);
 
         if (polygonHistorical && polygonHistorical.length > 0) {
-            console.log(`Found historical data from Polygon.io for ${symbol}`);
-            // Polygon data is already in {t, o, h, l, c, v, vw, n, source, isDelayed} format
-            // The existing code expects { data: bars[symbol] || [], error: null };
-            // And bars are expected to be { t, o, h, l, c, v, vw, n }
-            // So, we just need to ensure it's mapped correctly if the structure differs slightly
-            // from what Alpaca provided.
-            // The fetchPolygonHistoricalData already maps to a common structure.
-            return { data: polygonHistorical, error: null, source: 'Polygon.io' };
-        }
-
-        // Fallback to Alpaca if Polygon fails or returns no data
-        console.log(`Falling back to Alpaca for historical data for ${symbol}`);
-        let baseUrl;
-        if (isCrypto) {
-          baseUrl = "https://data.alpaca.markets/v1beta3/crypto/us/bars";
+            console.log(`[Chart Data] Polygon.io success for ${symbol}: ${polygonHistorical.length} points.`);
+            historicalData = polygonHistorical;
+            source = 'Polygon.io';
+            // Polygon data is already in {t, o, h, l, c, v, vw, n} format.
+            // We need to ensure it's mapped to {t, c} if that's what the chart component expects,
+            // or adapt the chart component. For now, let's assume the detailed chart can handle OHLCV.
+            // The `fetchPolygonHistoricalData` already maps to a common structure.
+            return { data: historicalData, error: null, source: source };
         } else {
-          baseUrl = "https://data.alpaca.markets/v2/stocks/bars";
+            console.warn(`[Chart Data] Polygon.io for ${symbol} returned no data or failed.`);
         }
-
-        const url = `${baseUrl}?symbols=${symbol}&timeframe=1Day&start=${new Date(
-          new Date().setFullYear(new Date().getFullYear() - 1)
-        ).toISOString()}`;
-
-        const response = await fetch(url, {
-          headers: {
-            "APCA-API-KEY-ID": ALPACA_API_KEY,
-            "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
-          },
-        });
-
-        if (!response.ok) {
-          return {
-            error: `API Error: ${response.status} ${response.statusText}`,
-            data: [],
-          };
-        }
-
-        const data = await response.json();
-
-        if (symbol.includes(".") && !data.bars[symbol]) {
-          const hyphenSymbol = symbol.replace(".", "");
-          // Pass through the original isCrypto flag
-          const alpacaResult = await fetchHistoricalData(hyphenSymbol, isCrypto); 
-          return { ...alpacaResult, source: alpacaResult.source || 'Alpaca' };
-        }
-
-        return { data: data.bars[symbol] || [], error: null, source: 'Alpaca' };
       } catch (error) {
-        console.error("Error fetching historical data:", error);
-        // If primary (Polygon) fails, Alpaca is tried. If Alpaca also errors, this is the final catch.
-        return { error: error.message, data: [], source: 'Error' };
+        console.error(`[Chart Data] Polygon.io error for ${symbol}:`, error.message);
       }
+
+      // 2. Try Yahoo Finance (especially for international or if Polygon fails)
+      if (historicalData.length === 0) {
+        console.log(`[Chart Data] Attempting Yahoo Finance for ${symbol}`);
+        try {
+          // getYahooFinanceHistoricalData returns {t, c}
+          const yahooHistorical = await getYahooFinanceHistoricalData(symbol, daysToFetchForChart);
+          if (yahooHistorical && yahooHistorical.length > 0) {
+            console.log(`[Chart Data] Yahoo Finance success for ${symbol}: ${yahooHistorical.length} points.`);
+            // This data is {t, c}. If the chart needs OHLCV, this won't be sufficient alone.
+            // For now, we'll return it as is. The chart component might need to adapt or
+            // we might need to decide if {t,c} is acceptable for the detailed chart.
+            historicalData = yahooHistorical;
+            source = 'Yahoo Finance';
+            return { data: historicalData, error: null, source: source };
+          } else {
+            console.warn(`[Chart Data] Yahoo Finance for ${symbol} returned no data.`);
+          }
+        } catch (error) {
+          console.error(`[Chart Data] Yahoo Finance error for ${symbol}:`, error.message);
+        }
+      }
+
+      // 3. Fallback to Alpaca (primarily for US stocks if others fail)
+      if (historicalData.length === 0 && !isCrypto) { // Alpaca typically for non-crypto
+        console.log(`[Chart Data] Attempting Alpaca for ${symbol}`);
+        try {
+          const fromAlpaca = new Date(new Date().setFullYear(to.getFullYear() - 1)).toISOString();
+          const url = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbol}&timeframe=1Day&start=${fromAlpaca}`;
+          const response = await fetch(url, {
+            headers: {
+              "APCA-API-KEY-ID": ALPACA_API_KEY,
+              "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+            },
+          });
+
+          if (!response.ok) {
+            console.warn(`[Chart Data] Alpaca API error for ${symbol}: ${response.status} ${response.statusText}`);
+          } else {
+            const alpacaJson = await response.json();
+            if (alpacaJson.bars && alpacaJson.bars[symbol] && alpacaJson.bars[symbol].length > 0) {
+              console.log(`[Chart Data] Alpaca success for ${symbol}: ${alpacaJson.bars[symbol].length} points.`);
+              historicalData = alpacaJson.bars[symbol]; // Alpaca data is {t, o, h, l, c, v, n, vw}
+              source = 'Alpaca';
+              return { data: historicalData, error: null, source: source };
+            } else if (symbol.includes(".")) { // Try removing dot for Alpaca if it failed
+                const symbolWithoutDot = symbol.replace(".", "");
+                console.log(`[Chart Data] Alpaca failed for ${symbol}, trying ${symbolWithoutDot}`);
+                const urlRetry = `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbolWithoutDot}&timeframe=1Day&start=${fromAlpaca}`;
+                const responseRetry = await fetch(urlRetry, { /* headers */ });
+                if(responseRetry.ok){
+                    const alpacaJsonRetry = await responseRetry.json();
+                     if (alpacaJsonRetry.bars && alpacaJsonRetry.bars[symbolWithoutDot] && alpacaJsonRetry.bars[symbolWithoutDot].length > 0) {
+                        console.log(`[Chart Data] Alpaca success for ${symbolWithoutDot}: ${alpacaJsonRetry.bars[symbolWithoutDot].length} points.`);
+                        historicalData = alpacaJsonRetry.bars[symbolWithoutDot];
+                        source = 'Alpaca';
+                        return { data: historicalData, error: null, source: source };
+                    }
+                }
+            }
+             if (historicalData.length === 0) { // if still no data after potential retry
+                console.warn(`[Chart Data] Alpaca for ${symbol} (and potential retry) returned no data.`);
+            }
+          }
+        } catch (error) {
+          console.error(`[Chart Data] Alpaca error for ${symbol}:`, error.message);
+        }
+      }
+      
+      // 4. Fallback to Alpha Vantage
+      if (historicalData.length === 0) {
+        console.log(`[Chart Data] Attempting Alpha Vantage for ${symbol}`);
+        try {
+          // getAlphaVantageHistoricalDaily returns {t, c}
+          const avHistorical = await getAlphaVantageHistoricalDaily(symbol, daysToFetchForChart, 'full'); // 'full' for more data
+          if (avHistorical && avHistorical.length > 0) {
+            console.log(`[Chart Data] Alpha Vantage success for ${symbol}: ${avHistorical.length} points.`);
+            historicalData = avHistorical;
+            source = 'Alpha Vantage';
+            return { data: historicalData, error: null, source: source };
+          } else {
+            console.warn(`[Chart Data] Alpha Vantage for ${symbol} returned no data.`);
+          }
+        } catch (error) {
+          console.error(`[Chart Data] Alpha Vantage error for ${symbol}:`, error.message);
+        }
+      }
+
+      // If all attempts fail or result in no data
+      if (historicalData.length === 0) {
+        console.error(`[Chart Data] All providers failed to fetch historical data for ${symbol}.`);
+        return { error: `No historical data found for ${symbol} from any provider.`, data: [], source: 'Error' };
+      }
+      
+      // This part should ideally not be reached if one of the return statements above is hit.
+      // If it is, it means historicalData was populated but not returned, which is a logic flaw.
+      // However, to be safe, if historicalData has content, return it.
+      return { data: historicalData, error: null, source: source };
     };
 
     const fetchAssetDetails = async (symbol) => {
@@ -460,54 +527,100 @@ export async function GET(req, { params }) {
     };
 
     const fetchNews = async (symbol) => {
+      let fetchedNews = [];
+      let source = "N/A";
+
+      // 1. Try Polygon.io first
       try {
-        // Try Polygon.io first
-        console.log(`Attempting to fetch news from Polygon.io for ${symbol}`);
+        console.log(`[News] Attempting Polygon.io for ${symbol}`);
         const polygonNews = await fetchPolygonNews(symbol);
         if (polygonNews && polygonNews.length > 0) {
-            console.log(`Found news from Polygon.io for ${symbol}`);
-            return polygonNews; // Already includes source_api and isDelayed (as false)
+          console.log(`[News] Polygon.io success for ${symbol}: ${polygonNews.length} articles.`);
+          // Ensure Polygon news items have a 'published_at' field, or adapt as needed.
+          // The fetchPolygonNews function should ideally standardize this.
+          return polygonNews.map(n => ({ ...n, source: n.source || 'Polygon.io' })); 
         }
-
-        // Try Alpaca second
-        const url = `https://data.alpaca.markets/v1beta1/news?symbols=${symbol}&limit=10`;
-        const response = await fetch(url, {
-          headers: {
-            "APCA-API-KEY-ID": ALPACA_API_KEY,
-            "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
-          },
-        });
-
-        let fetchedNews = []; // Renamed from newsData to avoid conflict
-        if (response.ok) {
-          const alpacaNews = await response.json();
-          if (alpacaNews.news && alpacaNews.news.length > 0) {
-            fetchedNews = alpacaNews.news.map(article => ({ ...article, source_api: 'Alpaca', isDelayed: false }));
-          }
-        } else {
-          console.warn(`Failed to fetch news from Alpaca for ${symbol}: ${response.statusText}`);
-        }
-
-        if (fetchedNews.length === 0) {
-          console.log(`Attempting to fetch news from Alpha Vantage for ${symbol}`);
-          const alphaVantageNews = await fetchAlphaVantageNews(symbol);
-          if (alphaVantageNews && alphaVantageNews.length > 0) {
-            fetchedNews = alphaVantageNews; // Already includes source_api and isDelayed
-          }
-        }
-        
-        // Removed recursive call for news with "." as it was problematic and Alpha Vantage might handle it.
-
-        return fetchedNews;
+        console.warn(`[News] Polygon.io for ${symbol} returned no news.`);
       } catch (error) {
-        console.error("Error fetching news:", error);
-        console.log(`Error with primary news source, attempting Alpha Vantage for ${symbol}`);
-        const alphaVantageNews = await fetchAlphaVantageNews(symbol);
-        if (alphaVantageNews && alphaVantageNews.length > 0) {
-          return alphaVantageNews;
-        }
-        return [];
+        console.error(`[News] Polygon.io error for ${symbol}:`, error.message);
       }
+
+      // 2. Try Yahoo Finance News (especially for international or if Polygon fails)
+      if (fetchedNews.length === 0) {
+        console.log(`[News] Attempting Yahoo Finance for ${symbol}`);
+        try {
+          const yahooNews = await getYahooFinanceNews(symbol, 10); // Fetch 10 articles
+          if (yahooNews && yahooNews.length > 0) {
+            console.log(`[News] Yahoo Finance success for ${symbol}: ${yahooNews.length} articles.`);
+            // Yahoo Finance news is already formatted with 'published_at' and 'source'
+            return yahooNews; 
+          }
+          console.warn(`[News] Yahoo Finance for ${symbol} returned no news.`);
+        } catch (error) {
+          console.error(`[News] Yahoo Finance error for ${symbol}:`, error.message);
+        }
+      }
+
+      // 3. Try Alpaca (primarily for US stocks if others fail)
+      // Alpaca news might be less relevant for international stocks but can be a fallback.
+      if (fetchedNews.length === 0) {
+        console.log(`[News] Attempting Alpaca for ${symbol}`);
+        try {
+          const url = `https://data.alpaca.markets/v1beta1/news?symbols=${symbol}&limit=10`;
+          const response = await fetch(url, {
+            headers: {
+              "APCA-API-KEY-ID": ALPACA_API_KEY,
+              "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+            },
+          });
+
+          if (response.ok) {
+            const alpacaJson = await response.json();
+            if (alpacaJson.news && alpacaJson.news.length > 0) {
+              console.log(`[News] Alpaca success for ${symbol}: ${alpacaJson.news.length} articles.`);
+              // Adapt Alpaca news structure if necessary, especially 'published_at' and 'source'
+              // The existing code maps 'Headline' to 'title', 'URL' to 'url', etc.
+              // Ensure 'published_at' is correctly mapped from 'CreatedAt' or similar.
+              // And add a source field.
+              fetchedNews = alpacaJson.news.map(article => ({
+                title: article.headline,
+                url: article.url,
+                source: article.source || 'Alpaca',
+                summary: article.summary || '',
+                image: article.images && article.images.length > 0 ? article.images[0].url : null,
+                published_at: article.created_at || article.updated_at, // Prefer created_at
+                symbols: article.symbols || [symbol],
+              }));
+              return fetchedNews;
+            }
+          }
+          console.warn(`[News] Alpaca for ${symbol} returned no news or failed: ${response.statusText}`);
+        } catch (error) {
+          console.error(`[News] Alpaca error for ${symbol}:`, error.message);
+        }
+      }
+      
+      // 4. Fallback to Alpha Vantage
+      if (fetchedNews.length === 0) {
+        console.log(`[News] Attempting Alpha Vantage for ${symbol}`);
+        try {
+          const alphaVantageNews = await fetchAlphaVantageNews(symbol); // fetchAlphaVantageNews should handle formatting
+          if (alphaVantageNews && alphaVantageNews.length > 0) {
+            console.log(`[News] Alpha Vantage success for ${symbol}: ${alphaVantageNews.length} articles.`);
+            // Ensure Alpha Vantage news items have 'published_at' and 'source'.
+            // The fetchAlphaVantageNews function should ideally standardize this.
+            return alphaVantageNews.map(n => ({ ...n, source: n.source || 'Alpha Vantage' }));
+          }
+          console.warn(`[News] Alpha Vantage for ${symbol} returned no news.`);
+        } catch (error) {
+          console.error(`[News] Alpha Vantage error for ${symbol}:`, error.message);
+        }
+      }
+
+      if (fetchedNews.length === 0) {
+        console.log(`[News] No news found for ${symbol} from any provider.`);
+      }
+      return fetchedNews; // Return whatever was fetched, or empty array
     };
 
     // Determine if the symbol is for a stock or crypto

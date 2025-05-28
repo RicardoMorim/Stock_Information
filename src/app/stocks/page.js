@@ -42,7 +42,12 @@ export default function StocksPage() {
         const data = await response.json();
         if (data.success && data.data) {
           setMainStocksData(data.data.mainStocksData || []);
-          setSearchableList(data.data.searchableList || []);
+          const sl = data.data.searchableList || [];
+          setSearchableList(sl);
+          // Log a sample of the searchable list to help debug missing symbols
+          if (sl.length > 0) {
+            console.log("Sample of searchableList symbols:", sl.slice(0, 10).map(s => s.symbol));
+          }
         } else {
           throw new Error(data.message || 'Could not retrieve initial stock data');
         }
@@ -83,11 +88,60 @@ export default function StocksPage() {
       (stock.symbol?.toLowerCase().includes(lowercasedFilter)) ||
       (stock.name?.toLowerCase().includes(lowercasedFilter))
     );
-    setFilteredSearchableList(filtered); // Update for totalPages calculation
+
+    // Sort the filtered results for relevance
+    const sortedFiltered = filtered.sort((a, b) => {
+      const aSymbol = a.symbol?.toLowerCase() || '';
+      const bSymbol = b.symbol?.toLowerCase() || '';
+      const aName = a.name?.toLowerCase() || '';
+      const bName = b.name?.toLowerCase() || '';
+
+      // Priority 1: Exact symbol match
+      if (aSymbol === lowercasedFilter && bSymbol !== lowercasedFilter) return -1;
+      if (bSymbol === lowercasedFilter && aSymbol !== lowercasedFilter) return 1;
+      if (aSymbol === lowercasedFilter && bSymbol === lowercasedFilter) { // Both exact symbol match, sort by symbol
+        return aSymbol.localeCompare(bSymbol);
+      }
+
+      // Priority 2: Symbol starts with search term
+      const aSymbolStartsWith = aSymbol.startsWith(lowercasedFilter);
+      const bSymbolStartsWith = bSymbol.startsWith(lowercasedFilter);
+      if (aSymbolStartsWith && !bSymbolStartsWith) return -1;
+      if (bSymbolStartsWith && !aSymbolStartsWith) return 1;
+      if (aSymbolStartsWith && bSymbolStartsWith) { // Both symbols start with, sort by symbol
+        return aSymbol.localeCompare(bSymbol);
+      }
+
+      // Priority 3: Name starts with search term
+      const aNameStartsWith = aName.startsWith(lowercasedFilter);
+      const bNameStartsWith = bName.startsWith(lowercasedFilter);
+      if (aNameStartsWith && !bNameStartsWith) return -1;
+      if (bNameStartsWith && !aNameStartsWith) return 1;
+      if (aNameStartsWith && bNameStartsWith) { // Both names start with, sort by name then symbol
+        const nameComparison = aName.localeCompare(bName);
+        if (nameComparison !== 0) return nameComparison;
+        return aSymbol.localeCompare(bSymbol);
+      }
+      
+      // Priority 4: Symbol includes search term (but doesn't start with)
+      const aSymbolIncludes = aSymbol.includes(lowercasedFilter);
+      const bSymbolIncludes = bSymbol.includes(lowercasedFilter);
+      if (aSymbolIncludes && !bSymbolIncludes) return -1;
+      if (bSymbolIncludes && !aSymbolIncludes) return 1;
+
+      // Priority 5: Name includes search term (but doesn't start with)
+      // This is the fallback if none of the above apply, already covered by initial filter.
+      // Final fallback: alphabetical by symbol, then by name for stability
+      const symbolComparison = aSymbol.localeCompare(bSymbol);
+      if (symbolComparison !== 0) return symbolComparison;
+      return aName.localeCompare(bName);
+    });
+    
+    setFilteredSearchableList(sortedFiltered); // Update for totalPages calculation using the sorted list
 
     const firstPageIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const lastPageIndex = firstPageIndex + ITEMS_PER_PAGE;
-    return filtered.slice(firstPageIndex, lastPageIndex);
+    return sortedFiltered.slice(firstPageIndex, lastPageIndex);
   }, [searchableList, searchTerm, currentPage]);
 
   const handleSearch = useCallback((query) => {
