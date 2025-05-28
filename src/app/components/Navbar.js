@@ -20,41 +20,48 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-navyBlue p-4 shadow-lg">
+    <nav className="bg-gray-900 p-4 shadow-lg sticky top-0 z-50">
       <div className="container mx-auto flex justify-between items-center">
         <Link href="/">
-          <span className="text-white font-bold text-xl">Stock Investor</span>
+          <span className="text-white font-bold text-2xl hover:text-blue-400 transition-colors">
+            Stock Investor
+          </span>
         </Link>
 
         <div className="flex items-center space-x-6">
           {isLoggedIn ? (
             <>
-              {/* Navigation Links */}
-              <Link 
-                href="/portfolio" 
-                className="text-white hover:text-orange transition-colors"
+              <Link
+                href="/portfolio"
+                className="text-gray-300 hover:text-blue-400 transition-colors px-3 py-2 rounded-md text-sm font-medium"
               >
                 Portfolio
               </Link>
-              <Link 
-                href="/stocks" 
-                className="text-white hover:text-orange transition-colors"
+              <Link
+                href="/stocks"
+                className="text-gray-300 hover:text-blue-400 transition-colors px-3 py-2 rounded-md text-sm font-medium"
               >
                 Stocks
               </Link>
               <button
                 onClick={handleLogout}
-                className="text-orange hover:text-white transition-colors"
+                className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
               >
                 Logout
               </button>
             </>
           ) : (
             <>
-              <Link href="/login" className="text-orange hover:text-white transition-colors">
+              <Link
+                href="/login"
+                className="text-gray-300 hover:text-blue-400 transition-colors px-3 py-2 rounded-md text-sm font-medium"
+              >
                 Login
               </Link>
-              <Link href="/register" className="text-orange hover:text-white transition-colors">
+              <Link
+                href="/register"
+                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              >
                 Register
               </Link>
             </>

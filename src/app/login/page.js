@@ -42,40 +42,70 @@ export default function Login() {
 
   return (
     <>
-      <div className="container mx-auto flex-grow flex items-center justify-center">
-        <div className="w-full max-w-md p-6 bg-navyBlue text-white rounded shadow-lg">
-          <h1 className="text-2xl font-bold text-center mb-6">Login</h1>
-          <form
-            onSubmit={handleLogin}
-            className="bg-white p-6 rounded shadow-md"
-          >
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full mb-4 p-2 border border-lightGray rounded text-black"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full mb-4 p-2 border border-lightGray rounded text-black"
-            />
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-gray-800 shadow-2xl rounded-lg p-8 space-y-6">
+          <h1 className="text-3xl font-bold text-center text-white mb-6">
+            Login to Stock Investor
+          </h1>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div>
+              <label
+                htmlFor="email"
+                className="text-sm font-medium text-gray-300 block mb-2"
+              >
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-gray-300 block mb-2"
+              >
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <button
               type="submit"
-              className="w-full py-2 bg-orange text-white rounded hover:bg-orange-600"
+              className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-semibold text-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
             >
               Login
             </button>
           </form>
-          {message && <p className="text-center text-red-500">{message}</p>}
-          <p className="text-center mt-4">
+          {message && (
+            <p
+              className={`text-center ${
+                message.includes("successful")
+                  ? "text-green-400"
+                  : "text-red-400"
+              } mt-4`}
+            >
+              {message}
+            </p>
+          )}
+          <p className="text-center text-sm text-gray-400 mt-6">
             Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-blue-600 hover:underline">
+            <Link
+              href="/register"
+              className="text-blue-400 hover:underline font-medium"
+            >
               Register here
             </Link>
           </p>

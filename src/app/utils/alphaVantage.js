@@ -1,5 +1,5 @@
 const ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query';
-const API_KEY = process.env.ALPHA_VANTAGE_KEY;
+const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_KEY;
 
 /**
  * Fetches general stock data (e.g., overview, quote) for a given symbol from Alpha Vantage.
@@ -8,15 +8,15 @@ const API_KEY = process.env.ALPHA_VANTAGE_KEY;
  * @returns {Promise<object|null>} - The stock data or null if an error occurs.
  */
 export async function fetchAlphaVantageStockData(symbol) {
-  if (!API_KEY) {
+  if (!ALPHA_VANTAGE_KEY) {
     console.error('Alpha Vantage API key is missing.');
     return null;
   }
   try {
     // Example: Fetching Global Quote (for price) and Overview (for company details)
     // Adjust function and parameters as needed based on specific data requirements.
-    const quoteUrl = `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${API_KEY}`;
-    const overviewUrl = `${ALPHA_VANTAGE_BASE_URL}?function=OVERVIEW&symbol=${symbol}&apikey=${API_KEY}`;
+    const quoteUrl = `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
+    const overviewUrl = `${ALPHA_VANTAGE_BASE_URL}?function=OVERVIEW&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
 
     const [quoteResponse, overviewResponse] = await Promise.all([
       fetch(quoteUrl),
@@ -96,14 +96,14 @@ export async function fetchAlphaVantageStockData(symbol) {
  * @returns {Promise<Array<object>|null>} - An array of news articles or null if an error occurs.
  */
 export async function fetchAlphaVantageNews(symbol) {
-  if (!API_KEY) {
+  if (!ALPHA_VANTAGE_KEY) {
     console.error('Alpha Vantage API key is missing.');
     return null;
   }
   try {
     // Alpha Vantage provides news through the "NEWS_SENTIMENT" function.
     // It can be filtered by tickers.
-    const url = `${ALPHA_VANTAGE_BASE_URL}?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${API_KEY}`;
+    const url = `${ALPHA_VANTAGE_BASE_URL}?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -147,7 +147,7 @@ export async function fetchAlphaVantageNews(symbol) {
  * @returns {Promise<Array<{t: number, c: number}>|null>} - Array of historical bars or null.
  */
 export async function getAlphaVantageHistoricalDaily(symbol, days = 7) {
-  if (!API_KEY) {
+  if (!ALPHA_VANTAGE_KEY) {
     console.error('Alpha Vantage API key is missing for getAlphaVantageHistoricalDaily.');
     return null;
   }
@@ -156,7 +156,7 @@ export async function getAlphaVantageHistoricalDaily(symbol, days = 7) {
     // 'outputsize=compact' returns the latest 100 data points.
     // 'outputsize=full' returns the full-length time series.
     // We'll use compact and then slice to get approximately `days`.
-    const url = `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${API_KEY}`;
+    const url = `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${ALPHA_VANTAGE_KEY}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -195,6 +195,54 @@ export async function getAlphaVantageHistoricalDaily(symbol, days = 7) {
 
   } catch (error) {
     console.error(`Error fetching daily historical data from Alpha Vantage for ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Fetches daily historical time series data for a given digital currency symbol from Alpha Vantage.
+ * @param {string} symbol - The digital currency symbol (e.g., BTC).
+ * @param {number} days - Number of past trading days to fetch (approximate, AV might return more or less).
+ * @param {string} market - The market to fetch the data in (e.g., USD, EUR).
+ * @returns {Promise<Array<{t: number, c: number}>|null>} - Array of historical bars or null.
+ */
+export async function getAlphaVantageDigitalCurrencyDaily(symbol, days = 7, market = 'USD') {
+  if (!ALPHA_VANTAGE_KEY) {
+    console.warn("Alpha Vantage API key is not set. Skipping Alpha Vantage digital currency fetch.");
+    return null;
+  }
+  try {
+    const url = `https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol=${symbol}&market=${market}&apikey=${ALPHA_VANTAGE_KEY}`;
+    console.log(`Fetching Alpha Vantage Digital Currency Daily for ${symbol} in market ${market}: ${url}`);
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Alpha Vantage API error for ${symbol}: ${response.status} ${response.statusText}`);
+      const errorBody = await response.text();
+      console.error("Alpha Vantage error body:", errorBody);
+      return null;
+    }
+    const data = await response.json();
+    if (data['Error Message'] || !data['Time Series (Digital Currency Daily)']) {
+      console.warn(`Alpha Vantage - No data or error for ${symbol}: ${data['Error Message'] || 'Data format issue'}`);
+      if (data['Note']) {
+        console.warn(`Alpha Vantage API Note for ${symbol}: ${data['Note']}`);
+      }
+      return null;
+    }
+
+    const timeSeries = data['Time Series (Digital Currency Daily)'];
+    const formattedData = Object.entries(timeSeries)
+      .slice(0, days) // Take the most recent 'days' entries
+      .map(([date, values]) => ({
+        t: new Date(date).getTime(),
+        c: parseFloat(values[`4a. close (${market})`] || values['4. close']), // Adjusted to common market close key
+      }))
+      .sort((a, b) => a.t - b.t); // Ensure ascending order by time
+
+    console.log(`Successfully fetched and formatted Alpha Vantage digital currency data for ${symbol}`);
+    return formattedData;
+  } catch (error) {
+    console.error(`Error fetching or processing Alpha Vantage digital currency data for ${symbol}:`, error);
     return null;
   }
 }

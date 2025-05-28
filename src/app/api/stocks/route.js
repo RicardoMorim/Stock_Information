@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import {polygonClient, fetchPolygonRecentHistoricalData, getPolygonSnapshot } from "@/app/utils/polygon";
+import { polygonClient, fetchPolygonRecentHistoricalData } from "@/app/utils/polygon";
 import alpaca, { getAlpacaHistoricalBars, getAlpacaSnapshots } from "@/app/utils/alpaca";
-import { getAlphaVantageHistoricalDaily } from "@/app/utils/alphaVantage"; // Added Alpha Vantage import
+import { getAlphaVantageHistoricalDaily, getAlphaVantageDigitalCurrencyDaily } from "@/app/utils/alphaVantage"; // Added Alpha Vantage import
 
 // In-memory cache
 let mainStocksCache = {
@@ -37,6 +37,10 @@ const MAIN_CRYPTO_TICKERS = [
   "ADA/USD",
 ]; // Alpaca uses / for crypto pairs
 
+// Placeholder for crypto details - ensure this is defined
+// If you have a mechanism to populate this, it should happen before fetchMainStocksData or within it, before the map.
+let cryptoDetails = {}; 
+
 async function fetchMainStocksData() {
   const now = Date.now();
   if (
@@ -52,11 +56,14 @@ async function fetchMainStocksData() {
   console.log("MAIN_CRYPTO_TICKERS:", MAIN_CRYPTO_TICKERS);
   console.log("Is MAIN_CRYPTO_TICKERS an array?", Array.isArray(MAIN_CRYPTO_TICKERS));
 
+  // If you have a function to fetch/load cryptoDetails, call it here:
+  // cryptoDetails = await loadCryptoDetails(); // Example
+
   try {
     let fetchedMainStocks = [];
 
     // Fetch stock/ETF data
-    if (MAIN_STOCK_ETF_TICKERS.length > 0) {
+    if (MAIN_STOCK_ETF_TICKERS && MAIN_STOCK_ETF_TICKERS.length > 0) {
       console.log("Attempting to fetch stock/ETF snapshots using custom getAlpacaSnapshots for symbols:", MAIN_STOCK_ETF_TICKERS);
       const stockSnapshotsObject = await getAlpacaSnapshots(MAIN_STOCK_ETF_TICKERS, false); // Use OUR utility function
       console.log("Raw stockSnapshotsObject from custom getAlpacaSnapshots:", JSON.stringify(stockSnapshotsObject, null, 2));
@@ -83,20 +90,71 @@ async function fetchMainStocksData() {
               console.warn(`Could not determine changePercent for ${symbol} from snapshot.dailyChange. latestPrice: ${latestPrice}`);
             }
 
-            let miniChartData = await fetchPolygonRecentHistoricalData(symbol, 7);
-            if (!miniChartData || miniChartData.length === 0) {
-              console.warn(`Polygon mini-chart data fetch failed for ${symbol}. Attempting Alpaca fallback.`);
-              miniChartData = await getAlpacaHistoricalBars(symbol, 7, false); 
-              if (!miniChartData || miniChartData.length === 0) {
-                console.warn(`Alpaca mini-chart data fetch also failed for ${symbol}. Attempting Alpha Vantage fallback.`);
-                miniChartData = await getAlphaVantageHistoricalDaily(symbol, 7);
-                if (!miniChartData || miniChartData.length === 0) {
-                    console.error(`Alpha Vantage mini-chart data fetch also failed for ${symbol}.`);
+            let miniChartData = null;
+            const DAYS_TO_FETCH_STOCK = 7;
+            const MIN_POINTS_STOCK = 3; // Prefer at least 3 points for a meaningful chart
+
+            // 1. Try Alpaca for stocks
+            console.log(`[Stock MiniChart] Attempting Alpaca for ${symbol}`);
+            let alpacaStockData = await getAlpacaHistoricalBars(symbol, DAYS_TO_FETCH_STOCK, false);
+            let alpacaPoints = alpacaStockData ? alpacaStockData.length : 0;
+
+            if (alpacaStockData && alpacaPoints >= MIN_POINTS_STOCK) {
+                miniChartData = alpacaStockData;
+                console.log(`[Stock MiniChart] Alpaca success for ${symbol}: ${miniChartData.length} points.`);
+            } else {
+                console.warn(`[Stock MiniChart] Alpaca for ${symbol} gave ${alpacaPoints} points (less than ${MIN_POINTS_STOCK}). Trying Polygon.`);
+
+                // 2. Try Polygon for stocks
+                let polygonStockData = await fetchPolygonRecentHistoricalData(symbol, DAYS_TO_FETCH_STOCK);
+                let polygonPoints = polygonStockData ? polygonStockData.length : 0;
+
+                if (polygonStockData && polygonPoints >= MIN_POINTS_STOCK) {
+                    miniChartData = polygonStockData;
+                    console.log(`[Stock MiniChart] Polygon success for ${symbol}: ${miniChartData.length} points.`);
                 } else {
-                    console.log(`Successfully fetched mini-chart data from Alpha Vantage for ${symbol}`);
+                    console.warn(`[Stock MiniChart] Polygon for ${symbol} gave ${polygonPoints} points (less than ${MIN_POINTS_STOCK}). Trying Alpha Vantage.`);
+
+                    // 3. Try Alpha Vantage for stocks
+                    let avStockData = await getAlphaVantageHistoricalDaily(symbol, DAYS_TO_FETCH_STOCK);
+                    let avPoints = avStockData ? avStockData.length : 0;
+
+                    if (avStockData && avPoints >= MIN_POINTS_STOCK) {
+                        miniChartData = avStockData;
+                        console.log(`[Stock MiniChart] Alpha Vantage success for ${symbol}: ${miniChartData.length} points.`);
+                    } else {
+                        console.warn(`[Stock MiniChart] Alpha Vantage for ${symbol} gave ${avPoints} points. Using best available for ${symbol}.`);
+                        // Select the best of the three, even if less than MIN_POINTS_STOCK
+                        if (alpacaPoints >= polygonPoints && alpacaPoints >= avPoints && alpacaPoints > 0) {
+                            miniChartData = alpacaStockData;
+                        } else if (polygonPoints > alpacaPoints && polygonPoints >= avPoints && polygonPoints > 0) { // check polygon only if it's strictly better than alpaca
+                            miniChartData = polygonStockData;
+                        } else if (avPoints > 0) { // Check AV if it has any points and others were worse or zero
+                             miniChartData = avStockData;
+                        } else {
+                            miniChartData = alpacaStockData && alpacaPoints > 0 ? alpacaStockData : (polygonStockData && polygonPoints > 0 ? polygonStockData : []); // Default to alpaca if it had data, else polygon, else empty
+                        }
+                        
+                        if (miniChartData && miniChartData.length > 0) {
+                             console.log(`[Stock MiniChart] Best available for ${symbol} (from fallbacks) has ${miniChartData.length} points.`);
+                        } else {
+                             console.log(`[Stock MiniChart] No chart data found for ${symbol} after all fallbacks.`);
+                             miniChartData = []; 
+                        }
+                    }
                 }
+            }
+            if (!miniChartData) miniChartData = []; // Final safety net
+
+            // Calculate changePercent from miniChartData if not available from snapshot
+            if ((changePercent === null || typeof changePercent !== 'number' || isNaN(changePercent)) && miniChartData && miniChartData.length >= 2) {
+              const currentClose = miniChartData[miniChartData.length - 1].c;
+              const previousClose = miniChartData[miniChartData.length - 2].c;
+              if (typeof currentClose === 'number' && typeof previousClose === 'number' && previousClose !== 0) {
+                changePercent = ((currentClose - previousClose) / previousClose) * 100;
+                console.log(`[Stock MiniChart] Calculated changePercent for ${symbol}: ${changePercent.toFixed(2)}% from miniChartData.`);
               } else {
-                console.log(`Successfully fetched mini-chart data from Alpaca for ${symbol}`);
+                console.warn(`[Stock MiniChart] Could not calculate changePercent for ${symbol} from miniChartData due to invalid close prices or previousClose being zero.`);
               }
             }
 
@@ -126,91 +184,130 @@ async function fetchMainStocksData() {
     }
 
     // Fetch crypto data
-    if (MAIN_CRYPTO_TICKERS.length > 0) {
+    if (MAIN_CRYPTO_TICKERS && MAIN_CRYPTO_TICKERS.length > 0) {
       console.log("Attempting to fetch crypto snapshots using custom getAlpacaSnapshots for symbols:", MAIN_CRYPTO_TICKERS);
-      const cryptoSnapshots = await getAlpacaSnapshots(MAIN_CRYPTO_TICKERS, true); // Use OUR utility function
+      const cryptoSnapshots = await getAlpacaSnapshots(MAIN_CRYPTO_TICKERS, true); 
       console.log("Raw cryptoSnapshots from custom getAlpacaSnapshots:", JSON.stringify(cryptoSnapshots, null, 2));
 
       if (!cryptoSnapshots) {
-        console.error("Custom getAlpacaSnapshots returned null or undefined.");
+        console.error("Custom getAlpacaSnapshots returned null or undefined for crypto.");
       } else if (Object.keys(cryptoSnapshots).length === 0) {
-        console.warn("Custom getAlpacaSnapshots returned an empty object. No crypto snapshots found for symbols:", MAIN_CRYPTO_TICKERS);
+        console.warn("Custom getAlpacaSnapshots returned an empty object for crypto. No crypto snapshots found for symbols:", MAIN_CRYPTO_TICKERS);
       }
       
       const cryptoDataPromises = MAIN_CRYPTO_TICKERS.map(async (originalSymbol) => {
         console.log(`Processing crypto: ${originalSymbol}`);
-        // The key in cryptoSnapshots from our utility should be the originalSymbol itself (e.g., "BTC/USD")
         const snapshot = cryptoSnapshots ? cryptoSnapshots[originalSymbol] : null; 
         console.log(`Snapshot for ${originalSymbol}:`, JSON.stringify(snapshot, null, 2));
 
         if (snapshot) {
-          console.log(`Snapshot found for ${originalSymbol}. Fetching mini chart...`);
-          const polygonSymbol = originalSymbol.includes('/') ? `X:${originalSymbol.replace('/','')}` : originalSymbol;
+          console.log(`Processing crypto for main page: ${originalSymbol}`);
+          const polygonSymbol = originalSymbol.includes('/') ? `X:${originalSymbol.replace('/', '')}` : originalSymbol;
+          const alphaVantageCryptoSymbol = originalSymbol.split('/')[0]; // e.g., "BTC" from "BTC/USD"
           
-          let miniChartData = await fetchPolygonRecentHistoricalData(polygonSymbol, 7);
-          if (!miniChartData || miniChartData.length === 0) {
-            console.warn(`Polygon mini-chart data fetch failed for ${polygonSymbol} (original: ${originalSymbol}). Attempting Alpaca fallback.`);
-            miniChartData = await getAlpacaHistoricalBars(originalSymbol, 7, true);
-            if (!miniChartData || miniChartData.length === 0) {
-              console.warn(`Alpaca mini-chart data fetch also failed for ${originalSymbol}. Attempting Alpha Vantage fallback.`);
-              // Alpha Vantage typically doesn't use "BTC/USD" but just "BTC" and might need a market context for crypto, 
-              // or might not support all crypto pairs directly for TIME_SERIES_DAILY.
-              // For simplicity, we'll try with the base symbol part if it's a crypto pair.
-              const avSymbol = originalSymbol.includes('/') ? originalSymbol.split('/')[0] : originalSymbol;
-              miniChartData = await getAlphaVantageHistoricalDaily(avSymbol, 7);
-              if (!miniChartData || miniChartData.length === 0) {
-                console.error(`Alpha Vantage mini-chart data fetch also failed for ${originalSymbol} (tried ${avSymbol}).`);
-              } else {
-                console.log(`Successfully fetched mini-chart data from Alpha Vantage for ${originalSymbol} (using ${avSymbol})`);
-              }
-            } else {
-              console.log(`Successfully fetched mini-chart data from Alpaca for ${originalSymbol}`);
-            }
+          let miniChartData = null;
+          const DAYS_TO_FETCH_CRYPTO = 7;
+          const MIN_POINTS_CRYPTO = 3; // Prefer at least 3 points
+
+          // 1. Try Polygon for Crypto
+          console.log(`[Crypto MiniChart] Attempting Polygon for ${originalSymbol} (using ${polygonSymbol})`);
+          let polygonCryptoData = await fetchPolygonRecentHistoricalData(polygonSymbol, DAYS_TO_FETCH_CRYPTO);
+          let polygonPoints = polygonCryptoData ? polygonCryptoData.length : 0;
+
+          if (polygonCryptoData && polygonPoints >= MIN_POINTS_CRYPTO) {
+              miniChartData = polygonCryptoData;
+              console.log(`[Crypto MiniChart] Polygon success for ${originalSymbol}: ${miniChartData.length} points.`);
           } else {
-            // console.log(`Successfully fetched mini-chart data from Polygon for ${polygonSymbol}`);
+              console.warn(`[Crypto MiniChart] Polygon for ${originalSymbol} gave ${polygonPoints} points (less than ${MIN_POINTS_CRYPTO}). Trying Alpaca.`);
+
+              // 2. Try Alpaca for Crypto
+              let alpacaCryptoData = await getAlpacaHistoricalBars(originalSymbol, DAYS_TO_FETCH_CRYPTO, true);
+              let alpacaPoints = alpacaCryptoData ? alpacaCryptoData.length : 0;
+
+              if (alpacaCryptoData && alpacaPoints >= MIN_POINTS_CRYPTO) {
+                  miniChartData = alpacaCryptoData;
+                  console.log(`[Crypto MiniChart] Alpaca success for ${originalSymbol}: ${miniChartData.length} points.`);
+              } else {
+                  console.warn(`[Crypto MiniChart] Alpaca for ${originalSymbol} gave ${alpacaPoints} points (less than ${MIN_POINTS_CRYPTO}). Trying Alpha Vantage.`);
+
+                  // 3. Try Alpha Vantage for Crypto
+                  let avCryptoData = await getAlphaVantageDigitalCurrencyDaily(alphaVantageCryptoSymbol, DAYS_TO_FETCH_CRYPTO);
+                  let avPoints = avCryptoData ? avCryptoData.length : 0;
+
+                  if (avCryptoData && avPoints >= MIN_POINTS_CRYPTO) {
+                      miniChartData = avCryptoData;
+                      console.log(`[Crypto MiniChart] Alpha Vantage success for ${originalSymbol}: ${miniChartData.length} points.`);
+                  } else {
+                      console.warn(`[Crypto MiniChart] Alpha Vantage for ${originalSymbol} gave ${avPoints} points. Using best available for ${originalSymbol}.`);
+                      
+                      if (polygonPoints >= alpacaPoints && polygonPoints >= avPoints && polygonPoints > 0) {
+                          miniChartData = polygonCryptoData;
+                      } else if (alpacaPoints > polygonPoints && alpacaPoints >= avPoints && alpacaPoints > 0) { // check alpaca only if it's strictly better than polygon
+                          miniChartData = alpacaCryptoData;
+                      } else if (avPoints > 0) { // Check AV if it has any points and others were worse or zero
+                          miniChartData = avCryptoData;
+                      } else {
+                           miniChartData = polygonCryptoData && polygonPoints > 0 ? polygonCryptoData : (alpacaCryptoData && alpacaPoints > 0 ? alpacaCryptoData : []); // Default to polygon if it had data, else alpaca, else empty
+                      }
+
+                      if (miniChartData && miniChartData.length > 0) {
+                           console.log(`[Crypto MiniChart] Best available for ${originalSymbol} (from fallbacks) has ${miniChartData.length} points.`);
+                      } else {
+                           console.log(`[Crypto MiniChart] No chart data found for ${originalSymbol} after all fallbacks.`);
+                           miniChartData = [];
+                      }
+                  }
+              }
           }
+          if (!miniChartData) miniChartData = []; // Final safety net
+
+
+          // Safely access cryptoDetails
+          const nameFromDetails = cryptoDetails[originalSymbol]?.name;
+
+          // For non-US stocks (if any were in MAIN_CRYPTO_TICKERS or a future similar list)
+          // or for any crypto, we might not want to hit Alpaca first if it's not appropriate.
+          // The current crypto logic tries Polygon, then Alpaca, then Alpha Vantage. This seems reasonable.
+          // If you had a list of *international* stocks, you would skip Alpaca for those.
 
           return {
             symbol: originalSymbol,
-            name: originalSymbol, 
-            price: snapshot.latestTrade?.p || snapshot.latestQuote?.ap || null, // Check both trade and quote
-            changePercent: snapshot.dailyChange !== undefined && snapshot.dailyChange !== null ? snapshot.dailyChange * 100 : null,
-            exchangeShortName: snapshot.latestTrade?.x || snapshot.latestQuote?.x || "CRYPTO",
+            name: nameFromDetails || originalSymbol, // Use fetched name if available, otherwise default to symbol
+            price: snapshot.latestTrade?.p || snapshot.latestQuote?.ap || null,
+            // Calculate changePercent based on dailyBar and prevDailyBar if available
+            changePercent: (snapshot.dailyBar && snapshot.prevDailyBar && typeof snapshot.dailyBar.c === 'number' && typeof snapshot.prevDailyBar.c === 'number' && snapshot.prevDailyBar.c !== 0)
+              ? ((snapshot.dailyBar.c - snapshot.prevDailyBar.c) / snapshot.prevDailyBar.c) * 100
+              : (snapshot.dailyChange !== undefined && snapshot.dailyChange !== null ? snapshot.dailyChange * 100 : null),
+            exchangeShortName: snapshot.latestTrade?.x || snapshot.latestQuote?.x || "CRYPTO", 
             type: "Crypto",
             source: "Alpaca", 
             isDelayed: false, 
-            miniChartData: miniChartData, 
+            miniChartData: miniChartData && miniChartData.length > 0 ? miniChartData : [],
           };
         } else {
           console.warn(`No snapshot data found in cryptoSnapshots object for crypto symbol: ${originalSymbol}`);
           return null; 
         }
       });
-      const resolvedCryptoData = (await Promise.all(cryptoDataPromises)).filter(item => item !== null);
-      console.log("Resolved crypto data (after filtering nulls):", JSON.stringify(resolvedCryptoData, null, 2));
-      fetchedMainStocks.push(...resolvedCryptoData);
 
+      const resolvedCryptoData = (await Promise.all(cryptoDataPromises)).filter(item => item !== null);
+      fetchedMainStocks.push(...resolvedCryptoData);
+      console.log("Resolved crypto data (after filtering nulls):", JSON.stringify(resolvedCryptoData, null, 2));
     } else {
       console.log("No MAIN_CRYPTO_TICKERS to fetch.");
     }
 
+    mainStocksCache.data = fetchedMainStocks;
+    mainStocksCache.lastFetched = now;
     console.log("Total fetchedMainStocks count:", fetchedMainStocks.length);
-    if(fetchedMainStocks.length > 0) {
+    if (fetchedMainStocks.length > 0) {
       console.log("First item in fetchedMainStocks:", JSON.stringify(fetchedMainStocks[0], null, 2));
     }
-    mainStocksCache = { data: fetchedMainStocks, lastFetched: now };
     return fetchedMainStocks;
+
   } catch (error) {
-    console.error(
-      "Error in fetchMainStocksData function with Alpaca:",
-      error.message,
-      "Stack trace:", error.stack,
-      "Alpaca error response:", error.response?.data
-    );
-    if (mainStocksCache.data) {
-      console.warn("Serving stale main stocks data due to fetch error.");
-      return mainStocksCache.data;
-    }
+    console.error("Error in fetchMainStocksData function:", error.message, "Stack trace:", error.stack);
+    // More specific error logging for the API response
     throw new Error(`Failed to fetch main stocks data. Original error: ${error.message}`);
   }
 }
@@ -262,6 +359,8 @@ async function fetchSearchableList() {
 
 export async function GET(request) {
   try {
+
+    
     const mainStocksPromise = fetchMainStocksData();
     const searchableListPromise = fetchSearchableList();
 
