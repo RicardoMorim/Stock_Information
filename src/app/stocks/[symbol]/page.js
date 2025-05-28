@@ -80,12 +80,25 @@ export default function StockDetails() {
 					const errorData = await response.json();
 					throw new Error(errorData.message || `Failed to fetch stock data for ${symbol}`);
 				}
-				const data = await response.json();
-				if (data.success) {
-					setStockData(data.data);
-					// setCachedData(symbol, 'financials', data.data);
+				const apiResponse = await response.json(); // Renamed from data to apiResponse
+
+				// Expected structure: apiResponse = { success: true, data: { success: true, data: { STOCK_PROPERTIES } } }
+				// So, apiResponse.data is { success: true, data: { STOCK_PROPERTIES } }
+				// And apiResponse.data.data is { STOCK_PROPERTIES }
+
+				if (apiResponse.success && apiResponse.data && typeof apiResponse.data === 'object' && apiResponse.data.data) {
+					// The large log previously here has been removed.
+					// console.log("StockDetails page: Raw data.data from API:", JSON.stringify(apiResponse.data, null, 2)); // This was the large log
+					console.log("StockDetails page: Extracted stock properties from apiResponse.data.data:", JSON.stringify(apiResponse.data.data, null, 2));
+					setStockData(apiResponse.data.data); // Use the deeply nested data object
+				} else if (apiResponse.success && apiResponse.data && !apiResponse.data.data) {
+					console.error("API success true, outer data object (apiResponse.data) present, but inner data payload (apiResponse.data.data) is missing:", apiResponse.data);
+					throw new Error('Received success from API but the crucial inner data payload is missing.');
+				} else if (apiResponse.success && !apiResponse.data) {
+					console.error("API success true, but outer data object (apiResponse.data) is missing:", apiResponse);
+					throw new Error('Received success from API but no data payload.');
 				} else {
-					throw new Error(data.message || `Could not retrieve data for ${symbol}`);
+					throw new Error(apiResponse.message || `Could not retrieve data for ${symbol}`);
 				}
 			} catch (err) {
 				console.error("Error fetching stock details:", err);
@@ -146,6 +159,14 @@ export default function StockDetails() {
 		);
 	}
 
+	// Log stockData before rendering
+	console.log(`StockDetails page rendering. isLoading: ${isLoading}, error: ${error}`);
+	if (stockData) {
+		console.log("StockDetails page stockData state before render (first 500 chars):", JSON.stringify(stockData, null, 2).substring(0, 500));
+	} else {
+		console.log("StockDetails page stockData state is null or undefined before render.");
+	}
+
 	if (!stockData) {
 		return (
 			<div className="container mx-auto p-6 bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center">
@@ -173,10 +194,14 @@ export default function StockDetails() {
 		volume,
 		vwap,
 		fundamentals,
-		secFilings
+		secFilings,
+		source, // Added
+		isDelayed // Added
 	} = stockData;
 
 	const keyMetricsData = { high, low, volume, vwap, fundamentals };
+
+	console.log("Stock historicalData:", historicalData);
 
 	return (
 		<div className="container mx-auto p-4 md:p-6 bg-gray-900 text-white min-h-screen">
@@ -187,13 +212,16 @@ export default function StockDetails() {
 				price={price}
 				changePercent={changePercent}
 				type={type}
+				source={source} // Added
+				isDelayed={isDelayed} // Added
 			/>
 
 			<PriceChart historicalData={historicalData} symbol={symbol} />
 
 			<KeyMetrics metrics={keyMetricsData} />
 			
-			{news && news.results && <NewsSection news={news.results} />}
+			{/* Ensure news is an array before passing to NewsSection */}
+			{Array.isArray(news) && news.length > 0 && <NewsSection news={news} symbol={symbol} />}
 
 			{secFilings && secFilings.length > 0 && (
 				<SECFilingsSection

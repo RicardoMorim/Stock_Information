@@ -9,14 +9,32 @@ export default function PortfolioTableRow({ stock, onSell, isSelling }) {
 
   if (!stock) return null;
 
-  const { symbol, name, quantity, current_price, total_value, purchase_price } = stock;
-  const avgCost = purchase_price / quantity; // Calculate average cost if purchase_price is total cost
-  const gainLoss = (current_price * quantity) - purchase_price;
-  const gainLossPercent = ((current_price * quantity) / purchase_price - 1) * 100;
+  // Align with API response structure
+  const { 
+    symbol,
+    name, // Name might not be directly in API response for aggregated holdings, ensure it's passed or handled
+    totalShares: quantity, // API sends totalShares, component uses quantity
+    currentPrice: current_price, // API sends currentPrice, component uses current_price
+    totalValue: total_value, // API sends totalValue, component uses total_value
+    avgCostPerShare: avg_cost_per_share, // API sends avgCostPerShare
+    totalCost: total_cost_eur, // API sends totalCost (which is total cost in EUR)
+    totalProfitLoss,
+    percentageReturn
+  } = stock;
+
+  // Ensure quantity is a number before calculations, default to 0 if not
+  const numQuantity = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 0;
+
+  // avg_cost_per_share is already the average cost in EUR from the API
+  const avgCost = typeof avg_cost_per_share === 'number' ? avg_cost_per_share : 0;
+  
+  // gainLoss and gainLossPercent can directly use totalProfitLoss and percentageReturn from API
+  const gainLoss = typeof totalProfitLoss === 'number' ? totalProfitLoss : 0;
+  const gainLossPercent = typeof percentageReturn === 'number' ? percentageReturn : 0;
   const isGain = gainLoss >= 0;
 
   const handleOpenSellModal = () => {
-    setSellQuantity(quantity.toString()); // Pre-fill with total quantity
+    setSellQuantity(numQuantity.toString()); // Pre-fill with total quantity
     setSellError('');
     setShowSellModal(true);
   };
@@ -29,8 +47,8 @@ export default function PortfolioTableRow({ stock, onSell, isSelling }) {
 
   const handleConfirmSell = async () => {
     const qtyToSell = parseFloat(sellQuantity);
-    if (isNaN(qtyToSell) || qtyToSell <= 0 || qtyToSell > quantity) {
-      setSellError(`Please enter a valid quantity (up to ${quantity}).`);
+    if (isNaN(qtyToSell) || qtyToSell <= 0 || qtyToSell > numQuantity) {
+      setSellError(`Please enter a valid quantity (up to ${numQuantity}).`);
       return;
     }
     setSellError('');
@@ -42,7 +60,7 @@ export default function PortfolioTableRow({ stock, onSell, isSelling }) {
     <>
       <tr className="border-b border-gray-700 hover:bg-gray-750 transition-colors duration-150 ease-in-out">
         <td className="py-4 px-3 md:px-5 text-sm md:text-base text-blue-400 font-medium whitespace-nowrap">{name || symbol} ({symbol})</td>
-        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{quantity.toLocaleString()}</td>
+        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{numQuantity.toLocaleString()}</td>
         <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(avgCost)}</td>
         <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(current_price)}</td>
         <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(total_value)}</td>
@@ -73,16 +91,16 @@ export default function PortfolioTableRow({ stock, onSell, isSelling }) {
             {sellError && <p className="text-red-500 text-sm mb-3">{sellError}</p>}
             <div className="mb-4">
               <label htmlFor="sellQuantity" className="block text-sm font-medium text-gray-300 mb-1">
-                Quantity to Sell (Max: {quantity})
+                Quantity to Sell (Max: {numQuantity})
               </label>
               <input
                 id="sellQuantity"
                 type="number"
                 value={sellQuantity}
                 onChange={(e) => setSellQuantity(e.target.value)}
-                placeholder={`Enter quantity (up to ${quantity})`}
+                placeholder={`Enter quantity (up to ${numQuantity})`}
                 min="0.000001"
-                max={quantity.toString()} // Ensure max is a string for input validation
+                max={numQuantity.toString()} // Ensure max is a string for input validation
                 step="any"
                 className="w-full px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />

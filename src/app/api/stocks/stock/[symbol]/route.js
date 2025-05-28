@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/app/utils/db";
 import Stock from "@/app/models/Stock";
+import { fetchAlphaVantageNews, fetchAlphaVantageStockData } from "@/app/utils/alphaVantage";
+import { getPolygonSnapshot, fetchPolygonNews, fetchPolygonHistoricalData } from "@/app/utils/polygon"; // Import Polygon utility
 
 const POLYGON_API_KEY = process.env.POLYGON_KEY;
 const ALPACA_API_KEY = process.env.ALPACA_KEY;
@@ -72,6 +74,8 @@ export async function GET(req, { params }) {
             prevDailyBar: {
               c: result.regularMarketPreviousClose,
             },
+            source: 'Yahoo Finance', // Add source
+            isDelayed: true // Yahoo data can be delayed
           },
         };
       } catch (error) {
@@ -81,59 +85,170 @@ export async function GET(req, { params }) {
     };
 
     const fetchSnapshot = async (symbol, isCrypto = false) => {
+      let snapshotDetails = null;
+      let source = 'N/A';
+      let isDelayed = false;
+      let name = null;
+      let type = null;
+      let exchange = null;
+
+      // Try Polygon.io first
       try {
-        // Try Alpaca first
-        let snapshotData = null;
-
-        if (!isCrypto) {
-          const alpacaResponse = await fetch(
-            `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbol}`,
-            {
-              headers: {
-                "APCA-API-KEY-ID": ALPACA_API_KEY,
-                "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
-              },
-            }
-          );
-
-          if (alpacaResponse.ok) {
-            const alpacaData = await alpacaResponse.json();
-            snapshotData = alpacaData[symbol];
-          }
+        console.log(`Trying Polygon.io for ${symbol}...`);
+        const polygonData = await getPolygonSnapshot(symbol); // This function is in /utils/polygon.js
+        if (polygonData && polygonData.price !== null && polygonData.price !== undefined) {
+            console.log(`Found ${symbol} in Polygon.io:`, polygonData);
+            snapshotDetails = {
+                latestTrade: { p: polygonData.price },
+                dailyBar: {
+                    o: polygonData.open,
+                    h: polygonData.high,
+                    l: polygonData.low,
+                    c: polygonData.price,
+                    v: polygonData.volume,
+                },
+                prevDailyBar: { c: polygonData.previousClose },
+            };
+            source = polygonData.source || 'Polygon.io';
+            isDelayed = polygonData.isDelayed || false;
+            name = polygonData.name;
+            type = polygonData.type;
+            exchange = polygonData.primary_exchange;
+        } else if (polygonData === null) {
+          // getPolygonSnapshot explicitly returned null (e.g. 403 or other error handled inside it)
+          console.log(`getPolygonSnapshot returned null for ${symbol}, proceeding to fallbacks.`);
         }
+      } catch (polygonError) {
+        // This catch is if getPolygonSnapshot itself throws an unhandled error
+        console.error(`Error calling getPolygonSnapshot for ${symbol}:`, polygonError.message);
+        // Ensure snapshotDetails remains null to trigger fallbacks
+      }
 
-        // If no Alpaca data, try Yahoo
-        if (!snapshotData) {
-          console.log(`Trying Yahoo Finance for ${symbol}...`);
-          const yahooData = await fetchYahooData(symbol);
+      // Try Alpaca second, if Polygon failed or didn't provide data
+      if (!snapshotDetails) {
+        console.log(`Polygon.io failed or no data for ${symbol}, trying Alpaca...`);
+        source = 'Alpaca'; // Default to Alpaca if we attempt it
+        isDelayed = false;  // Alpaca real-time for subscribers
+        try {
+          if (!isCrypto) {
+            const alpacaResponse = await fetch(
+              `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbol}`,
+              {
+                headers: {
+                  "APCA-API-KEY-ID": ALPACA_API_KEY,
+                  "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+                },
+              }
+            );
+
+            if (alpacaResponse.ok) {
+              const alpacaData = await alpacaResponse.json();
+              if (alpacaData[symbol]) {
+                snapshotDetails = alpacaData[symbol]; // Alpaca snapshot structure
+                console.log(`Found ${symbol} in Alpaca:`, snapshotDetails);
+                // name, type, exchange might not be directly in alpacaData[symbol] in this format
+                // these will be enriched later by fetchAssetDetails if needed
+              }
+            } else {
+              console.warn(`Alpaca API error for ${symbol}: ${alpacaResponse.status}`);
+            }
+          }
+          // Add similar logic for Alpaca crypto if needed, or assume it's handled by general crypto logic
+        } catch (alpacaError) {
+          console.error(`Error fetching from Alpaca for ${symbol}:`, alpacaError.message);
+        }
+      }
+
+      // If no Alpaca data, try Yahoo
+      if (!snapshotDetails) {
+        console.log(`Alpaca failed or no data for ${symbol}, trying Yahoo Finance...`);
+        try {
+          const yahooData = await fetchYahooData(symbol); // fetchYahooData is defined above
           if (yahooData && yahooData[symbol]) {
             console.log(`Found ${symbol} in Yahoo:`, yahooData[symbol]);
-            // Fix: Extract the data directly instead of nesting it again
-            snapshotData = yahooData[symbol];
+            snapshotDetails = yahooData[symbol]; // Already includes source and isDelayed
+            source = snapshotDetails.source;
+            isDelayed = snapshotDetails.isDelayed;
+            // name, type, exchange might not be directly in yahooData[symbol]
           }
+        } catch (yahooError) {
+          console.error(`Error fetching from Yahoo for ${symbol}:`, yahooError.message);
         }
-
-        // If still no data and symbol has dot, try without dot
-        if (!snapshotData && symbol.includes(".")) {
-          const symbolWithoutDot = symbol.replace(".", "");
-          return fetchSnapshot(symbolWithoutDot, isCrypto);
-        }
-
-        if (!snapshotData) {
-          console.log(`No data found for ${symbol} in either API`);
-          return null;
-        }
-
-        // Return the data directly without additional nesting
-        return snapshotData;
-      } catch (error) {
-        console.error("Snapshot fetch error:", error);
-        return null;
       }
+
+      // If still no data (Alpaca/Yahoo failed), try Alpha Vantage
+      if (!snapshotDetails) {
+        console.log(`Yahoo failed or no data for ${symbol}, trying Alpha Vantage...`);
+        try {
+          const alphaVantageData = await fetchAlphaVantageStockData(symbol); // from /utils/alphaVantage.js
+          if (alphaVantageData) {
+            console.log(`Found ${symbol} in Alpha Vantage:`, alphaVantageData);
+            snapshotDetails = {
+                latestTrade: { p: alphaVantageData.price },
+                dailyBar: { 
+                    c: alphaVantageData.price,
+                    h: alphaVantageData.high,
+                    l: alphaVantageData.low,
+                    v: alphaVantageData.volume,
+                },
+                prevDailyBar: { c: alphaVantageData.previousClose },
+            };
+            source = alphaVantageData.source || 'Alpha Vantage';
+            isDelayed = alphaVantageData.isDelayed || true;
+            name = alphaVantageData.name || name; // Prioritize AV name if available
+          }
+        } catch (alphaVantageError) {
+          console.error(`Error fetching from Alpha Vantage for ${symbol}:`, alphaVantageError.message);
+        }
+      }
+
+      // If still no data and symbol has dot, try without dot (recursive call)
+      // This recursive call should be careful to avoid infinite loops if symbol transformation is complex
+      if (!snapshotDetails && symbol.includes(".")) {
+        console.log(`No data for ${symbol}, trying recursive call without '.'`);
+        const symbolWithoutDot = symbol.replace(".", "");
+        // Return the result of the recursive call directly
+        // The recursive call will handle its own source, isDelayed, name, type, exchange
+        return fetchSnapshot(symbolWithoutDot, isCrypto); 
+      }
+
+      if (!snapshotDetails) {
+        console.log(`No snapshot data found for ${symbol} in any API after all fallbacks.`);
+        return null; // Explicitly return null if no data found
+      }
+      
+      // Consolidate and return
+      return { 
+        ...snapshotDetails, 
+        source: source, 
+        isDelayed: isDelayed,
+        name: name || snapshotDetails.name, // Ensure name is carried through
+        type: type || snapshotDetails.type, // Ensure type is carried through
+        exchange: exchange || snapshotDetails.exchange // Ensure exchange is carried through
+      };
     };
 
     const fetchHistoricalData = async (symbol, isCrypto = false) => {
       try {
+        // Try Polygon.io first
+        console.log(`Attempting to fetch historical data from Polygon.io for ${symbol}`);
+        const to = new Date().toISOString().split('T')[0];
+        const from = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0];
+        const polygonHistorical = await fetchPolygonHistoricalData(symbol, from, to, 'day', 1);
+
+        if (polygonHistorical && polygonHistorical.length > 0) {
+            console.log(`Found historical data from Polygon.io for ${symbol}`);
+            // Polygon data is already in {t, o, h, l, c, v, vw, n, source, isDelayed} format
+            // The existing code expects { data: bars[symbol] || [], error: null };
+            // And bars are expected to be { t, o, h, l, c, v, vw, n }
+            // So, we just need to ensure it's mapped correctly if the structure differs slightly
+            // from what Alpaca provided.
+            // The fetchPolygonHistoricalData already maps to a common structure.
+            return { data: polygonHistorical, error: null, source: 'Polygon.io' };
+        }
+
+        // Fallback to Alpaca if Polygon fails or returns no data
+        console.log(`Falling back to Alpaca for historical data for ${symbol}`);
         let baseUrl;
         if (isCrypto) {
           baseUrl = "https://data.alpaca.markets/v1beta3/crypto/us/bars";
@@ -163,13 +278,16 @@ export async function GET(req, { params }) {
 
         if (symbol.includes(".") && !data.bars[symbol]) {
           const hyphenSymbol = symbol.replace(".", "");
-          return fetchHistoricalData(hyphenSymbol, isCrypto);
+          // Pass through the original isCrypto flag
+          const alpacaResult = await fetchHistoricalData(hyphenSymbol, isCrypto); 
+          return { ...alpacaResult, source: alpacaResult.source || 'Alpaca' };
         }
 
-        return { data: data.bars[symbol] || [], error: null };
+        return { data: data.bars[symbol] || [], error: null, source: 'Alpaca' };
       } catch (error) {
         console.error("Error fetching historical data:", error);
-        return { error: error.message, data: [] };
+        // If primary (Polygon) fails, Alpaca is tried. If Alpaca also errors, this is the final catch.
+        return { error: error.message, data: [], source: 'Error' };
       }
     };
 
@@ -343,8 +461,16 @@ export async function GET(req, { params }) {
 
     const fetchNews = async (symbol) => {
       try {
-        const url = `https://data.alpaca.markets/v1beta1/news?symbols=${symbol}&limit=10`;
+        // Try Polygon.io first
+        console.log(`Attempting to fetch news from Polygon.io for ${symbol}`);
+        const polygonNews = await fetchPolygonNews(symbol);
+        if (polygonNews && polygonNews.length > 0) {
+            console.log(`Found news from Polygon.io for ${symbol}`);
+            return polygonNews; // Already includes source_api and isDelayed (as false)
+        }
 
+        // Try Alpaca second
+        const url = `https://data.alpaca.markets/v1beta1/news?symbols=${symbol}&limit=10`;
         const response = await fetch(url, {
           headers: {
             "APCA-API-KEY-ID": ALPACA_API_KEY,
@@ -352,18 +478,34 @@ export async function GET(req, { params }) {
           },
         });
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch news: ${response.statusText}`);
+        let fetchedNews = []; // Renamed from newsData to avoid conflict
+        if (response.ok) {
+          const alpacaNews = await response.json();
+          if (alpacaNews.news && alpacaNews.news.length > 0) {
+            fetchedNews = alpacaNews.news.map(article => ({ ...article, source_api: 'Alpaca', isDelayed: false }));
+          }
+        } else {
+          console.warn(`Failed to fetch news from Alpaca for ${symbol}: ${response.statusText}`);
         }
 
-        if (symbol.includes(".") && !response.news) {
-          return fetchNews(symbol.replace(".", ""));
+        if (fetchedNews.length === 0) {
+          console.log(`Attempting to fetch news from Alpha Vantage for ${symbol}`);
+          const alphaVantageNews = await fetchAlphaVantageNews(symbol);
+          if (alphaVantageNews && alphaVantageNews.length > 0) {
+            fetchedNews = alphaVantageNews; // Already includes source_api and isDelayed
+          }
         }
+        
+        // Removed recursive call for news with "." as it was problematic and Alpha Vantage might handle it.
 
-        const newsData = await response.json();
-        return newsData.news;
+        return fetchedNews;
       } catch (error) {
         console.error("Error fetching news:", error);
+        console.log(`Error with primary news source, attempting Alpha Vantage for ${symbol}`);
+        const alphaVantageNews = await fetchAlphaVantageNews(symbol);
+        if (alphaVantageNews && alphaVantageNews.length > 0) {
+          return alphaVantageNews;
+        }
         return [];
       }
     };
@@ -379,52 +521,99 @@ export async function GET(req, { params }) {
       );
     }
 
-    const snapshotData = await fetchSnapshot(symbol, isCrypto);
+    // const snapshotData = await fetchSnapshot(symbol, isCrypto); // Already fetched as snapshot
 
-    if (!snapshotData) {
-      return NextResponse.json(
-        { success: false, message: "Asset not found." },
-        { status: 404 }
-      );
+    // if (!snapshotData) { // Redundant check
+    //   return NextResponse.json(
+    //     { success: false, message: "Asset not found." },
+    //     { status: 404 }
+    //   );
+    // }
+    
+    const snapshotDataToUse = snapshot; // This line should use the result of fetchSnapshot
+
+    // Ensure historicalData is an object with a 'data' array and 'source'
+    let historicalDataResult = await fetchHistoricalData(symbol, isCrypto);
+    if (!historicalDataResult || typeof historicalDataResult !== 'object' || !Array.isArray(historicalDataResult.data)) {
+        console.warn(`Historical data for ${symbol} was invalid, setting to empty. Received:`, historicalDataResult);
+        historicalDataResult = { data: [], error: historicalDataResult?.error || "Invalid data structure", source: historicalDataResult?.source || 'Unknown' };
     }
+    
+    const newsData = await fetchNews(symbol);
+    const assetDetails = await fetchAssetDetails(symbol);
 
-    // Fetch additional data
-    const [historicalDataResult, assetDetails, newsData, fundamentals] =
-      await Promise.all([
-        fetchHistoricalData(symbol, isCrypto),
-        fetchAssetDetails(symbol),
-        fetchNews(symbol),
-        fetchFundamentalMetrics(symbol),
-      ]);
+    // Fetch fundamental metrics
+    const fundamentalMetrics = await fetchFundamentalMetrics(symbol); // Uncommented and fetched
 
-    const currentPrice = snapshotData.latestTrade?.p || 0;
-    const prevClose = snapshotData.prevDailyBar?.c || 0;
-    const changePercent = prevClose
-      ? ((currentPrice - prevClose) / prevClose) * 100
-      : 0;
+    // Fetch dividend yield data
+    // We need the current price for dividend yield calculation, use snapshot's price
+    const currentPriceForDividendCalc = snapshotDataToUse.latestTrade?.p;
+    const dividendYieldData = await fetchDividendYield(symbol, currentPriceForDividendCalc);
 
+
+    // Determine the final name, type, and exchangeShortName
+    // Priority: Snapshot data (if it has it, e.g. from Polygon), then assetDetails from DB
+    const finalName = snapshotDataToUse.name || assetDetails.name || symbol;
+    const finalType = snapshotDataToUse.type || assetDetails.type || (isCrypto ? "Crypto" : "Stock/ETF");
+    const finalExchange = snapshotDataToUse.exchange || snapshotDataToUse.latestTrade?.x || snapshotDataToUse.exchangeShortName || "N/A";
+
+    // Prepare the response object
     const responseData = {
-      symbol,
-      name: assetDetails.name || symbol,
-      type: assetDetails.type || "stock",
-      price: currentPrice,
-      changePercent,
-      high: snapshotData.dailyBar?.h || currentPrice,
-      low: snapshotData.dailyBar?.l || currentPrice,
-      volume: snapshotData.dailyBar?.v || 0,
-      vwap: snapshotData.dailyBar?.vw || currentPrice,
-      historicalData: {
-        data: historicalDataResult.data || [],
-        error: historicalDataResult.error || null,
-      },
-      news: newsData || [],
-      fundamentals: fundamentals || [],
-      // Add data availability flags
-      dataAvailability: {
-        price: Boolean(currentPrice),
-        historical: Boolean(historicalDataResult?.data?.length),
-        news: Boolean(newsData?.length),
-        fundamentals: Boolean(fundamentals?.length),
+      success: true,
+      data: {
+        symbol: symbol,
+        name: finalName,
+        exchangeShortName: finalExchange,
+        type: finalType,
+        price: snapshotDataToUse.latestTrade?.p || null,
+        change: snapshotDataToUse.dailyBar?.c && snapshotDataToUse.prevDailyBar?.c 
+                ? snapshotDataToUse.dailyBar.c - snapshotDataToUse.prevDailyBar.c 
+                : null,
+        changePercent: snapshotDataToUse.dailyBar?.c && snapshotDataToUse.prevDailyBar?.c && snapshotDataToUse.prevDailyBar.c !== 0
+                       ? ((snapshotDataToUse.dailyBar.c - snapshotDataToUse.prevDailyBar.c) / snapshotDataToUse.prevDailyBar.c) * 100
+                       : (snapshotDataToUse.todaysChangePerc ?? null), // Fallback to todaysChangePerc if available
+        high: snapshotDataToUse.dailyBar?.h || null,
+        low: snapshotDataToUse.dailyBar?.l || null,
+        open: snapshotDataToUse.dailyBar?.o || null,
+        previousClose: snapshotDataToUse.prevDailyBar?.c || null,
+        volume: snapshotDataToUse.dailyBar?.v || null,
+        vwap: snapshotDataToUse.dailyBar?.vw || null, // VWAP might not be available from all sources
+        historicalData: historicalDataResult.data,
+        historicalDataSource: historicalDataResult.source, // Added
+        news: Array.isArray(newsData) ? newsData : [], // Ensure news is always an array
+        
+        // Integrate fundamental and dividend data
+        fundamentals: {
+          // Assuming fetchFundamentalMetrics returns an array, we might want the latest.
+          // For now, let's pass the first item if available, or an empty object.
+          // The structure of fundamentalMetrics needs to be known to map correctly.
+          // Based on fetchFundamentalMetrics, it returns an array of objects with:
+          // income, cashFlow, balance, comprehensive, companyInfo, period
+          // Let's assume we take the most recent (first in the array if sorted desc by date)
+          latestFinancials: fundamentalMetrics && fundamentalMetrics.length > 0 ? fundamentalMetrics[0] : {},
+          // Extract specific common metrics if available directly from Polygon's Ticker Details or similar
+          // For example, market cap, P/E, EPS are often part of "ticker details" or "quote" endpoints in some APIs.
+          // Polygon's /vX/reference/financials gives raw statement data.
+          // We might need to calculate P/E, EPS, etc., or rely on Polygon providing them elsewhere.
+          // For now, KeyMetrics.js expects specific fields like market_capitalization, price_earnings_ratio.
+          // Let's see what `fetchFundamentalMetrics` actually provides.
+          // The `fetchFundamentalMetrics` in the provided code returns an array of financials.
+          // The `KeyMetrics.js` component expects `metrics.fundamentals?.market_capitalization?.value`
+          // This implies the API should structure it like that.
+          // Let's adjust based on what Polygon /vX/reference/financials actually returns.
+          // Typically, you'd get market_cap, P/E, EPS from a different endpoint or calculate them.
+          // For now, we'll pass what we have and adjust KeyMetrics.js or this API later.
+          rawFinancials: fundamentalMetrics, // Pass the whole array for now
+        },
+        dividendInfo: dividendYieldData && !dividendYieldData.error ? {
+            yield: dividendYieldData.dividendYield, // e.g., 2.5 for 2.5%
+            annualAmount: dividendYieldData.annualDividendAmount,
+            // Add other dividend details if needed
+        } : { yield: null, annualAmount: null },
+
+        // secFilings: filings, // Placeholder for SEC filings
+        source: snapshotDataToUse.source || 'N/A', // Source of the snapshot data
+        isDelayed: snapshotDataToUse.isDelayed || false, // Whether the snapshot data is delayed
       },
     };
 

@@ -1,7 +1,6 @@
-
 "use client";
 
-const StockHeader = ({ symbol, name, exchange, price, changePercent, type }) => {
+const StockHeader = ({ symbol, name, exchange, price, changePercent, type, source, isDelayed }) => {
     const isPositiveChange = changePercent >= 0;
 
     return (
@@ -11,6 +10,11 @@ const StockHeader = ({ symbol, name, exchange, price, changePercent, type }) => 
                 <p className="text-md text-gray-400">
                     {symbol} ({exchange || 'N/A'}) - <span className="font-semibold">{type || 'Stock'}</span>
                 </p>
+                {source && isDelayed && (
+                    <p className="text-xs text-yellow-400 mt-1">
+                        Data from {source} (may be delayed)
+                    </p>
+                )}
             </div>
             <div className="mt-4 md:mt-0 text-left md:text-right">
                 <p className={`text-3xl font-bold ${isPositiveChange ? 'text-green-400' : 'text-red-400'}`}>

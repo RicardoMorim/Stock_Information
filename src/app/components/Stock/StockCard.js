@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { formatCurrency } from '@/app/utils/currency'; // Assuming you have a currency formatter
+import { formatCurrency } from '@/app/utils/currency';
+import MiniPriceChart from './MiniPriceChart'; // Added import
 
 export default function StockCard({ stock }) {
   if (!stock || !stock.symbol) return null; // Basic validation
 
-  const { symbol, name, price, changePercent, exchangeShortName, type } = stock;
+  const { symbol, name, price, changePercent, exchangeShortName, type, miniChartData } = stock; // Added miniChartData
   
   // Check if price and changePercent are valid numbers before formatting
   const hasPriceData = typeof price === 'number' && !isNaN(price);
@@ -19,7 +20,7 @@ export default function StockCard({ stock }) {
           <h3 className="text-xl md:text-2xl font-semibold text-blue-400 truncate" title={name || symbol}>
             {name || symbol} {/* Display symbol if name is not available */}
           </h3>
-          {exchangeShortName && (
+          {exchangeShortName && exchangeShortName !== "N/A" && ( // Added check for "N/A"
             <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded-full uppercase tracking-wider">
               {exchangeShortName}
             </span>
@@ -28,6 +29,13 @@ export default function StockCard({ stock }) {
         <p className="text-sm text-gray-400 mb-1 truncate" title={symbol}>Symbol: {symbol}</p>
         {type && <p className="text-xs text-gray-500 mb-3">Type: {type}</p>}
       </div>
+
+      {/* Mini Price Chart */} 
+      {miniChartData && miniChartData.length > 0 && (
+        <div className="my-3 h-20">
+          <MiniPriceChart chartData={miniChartData} symbol={symbol} />
+        </div>
+      )}
 
       <div className="mt-auto">
         {hasPriceData && (

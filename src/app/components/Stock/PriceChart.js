@@ -1,11 +1,10 @@
-
 "use client";
 import dynamic from 'next/dynamic';
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 const PriceChart = ({ historicalData, symbol }) => {
-    const chartData = historicalData?.data?.map((data) => ({ x: new Date(data.t), y: data.c })) || [];
+    const chartData = historicalData?.map((data) => ({ x: new Date(data.t), y: data.c })) || [];
 
     const priceChartOptions = {
         chart: {

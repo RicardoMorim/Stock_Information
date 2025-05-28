@@ -7,7 +7,8 @@ import bcrypt from "bcrypt";
 export async function POST(request) {
   try {
     await connectToDatabase();
-    const { email, password } = await request.json();
+    const body = await request.json(); // Store body
+    const { email, password } = body; // Destructure from stored body
 
     const user = await User.findOne({ email });
     if (!user) {

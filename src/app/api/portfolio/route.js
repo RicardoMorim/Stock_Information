@@ -114,80 +114,93 @@ export async function GET(req) {
 		await connectToDatabase();
 
 		const portfolio = await Portfolio.findOne({ userId });
-		console.log("Raw portfolio data:", portfolio);
 
-		if (!portfolio) {
-			const newPortfolio = new Portfolio({ userId, holdings: [] });
-			await newPortfolio.save();
-			return NextResponse.json({ success: true, data: [] });
+		if (!portfolio || portfolio.holdings.length === 0) {
+			return NextResponse.json({
+				success: true,
+				data: [],
+				summary: {
+					totalInvestment: 0,
+					currentTotalValue: 0,
+					totalProfitLoss: 0,
+					percentageReturn: 0
+				}
+			});
 		}
 
-		// Initialize holdings aggregation
 		const holdingsBySymbol = {};
-
 		portfolio.holdings.forEach(holding => {
 			const symbol = holding.symbol;
 			if (!holdingsBySymbol[symbol]) {
 				holdingsBySymbol[symbol] = {
 					symbol,
+					name: holding.name || symbol,
 					totalShares: 0,
-					totalCost: 0,
-					costInEUR: holding.costInEUR, // Use costInEUR from the schema
-					tradingCurrency: holding.tradingCurrency
+					aggregatedTotalCostInEUR: 0,
 				};
 			}
-
-			// Aggregate holdings
 			holdingsBySymbol[symbol].totalShares += holding.shares;
-			holdingsBySymbol[symbol].totalCost += holding.shares * holding.costPerShare;
+			holdingsBySymbol[symbol].aggregatedTotalCostInEUR += holding.shares * (holding.costInEUR || 0);
 		});
 
-		console.log("Holdings by symbol:", holdingsBySymbol);
-
-		// Fetch current prices and exchange rates
 		const symbols = Object.keys(holdingsBySymbol);
 		const prices = await fetchStockPrices(symbols);
 		const exchangeRates = await getExchangeRates();
 
-		// Calculate metrics for each holding
-		const aggregatedHoldings = symbols.map(symbol => {
-			const holding = holdingsBySymbol[symbol];
-			const priceData = prices[symbol] || { price: 0, currency: 'USD' };
+		const aggregatedHoldings = symbols.map(symbolKey => {
+			const holdingAgg = holdingsBySymbol[symbolKey];
+			const priceData = prices[symbolKey];
 
-			// Convert price to EUR
-			let currentPriceEUR;
-			if (priceData.currency === 'EUR') {
-				currentPriceEUR = priceData.price;
-			} else {
-				// Convert from source currency to EUR
-				currentPriceEUR = exchangeRates ?
-					(priceData.price / exchangeRates[priceData.currency] * exchangeRates['EUR']) : 0;
+			let currentPriceEUR = 0;
+			if (priceData && typeof priceData.price === 'number' && priceData.price > 0) {
+				if (priceData.currency === 'EUR') {
+					currentPriceEUR = priceData.price;
+				} else if (exchangeRates && exchangeRates[priceData.currency] && exchangeRates['EUR']) {
+					currentPriceEUR = (priceData.price / exchangeRates[priceData.currency]) * exchangeRates['EUR'];
+				} else if (exchangeRates && priceData.currency === 'USD' && exchangeRates['EUR']) { // Common fallback if original currency not in rates, assume USD base
+                    currentPriceEUR = priceData.price * exchangeRates['EUR']; // If priceData is USD and rates are USD based
+                }
 			}
 
-			const totalShares = holding.totalShares || 0;
-			const avgCostPerShare = holding.costInEUR || 0;
-			const totalValueEUR = totalShares * currentPriceEUR;
-			const totalCostEUR = totalShares * avgCostPerShare;
-			const totalProfitLoss = totalValueEUR - totalCostEUR;
-			const percentageReturn = totalCostEUR > 0 ?
-				(totalProfitLoss / totalCostEUR) * 100 : 0;
+			const totalShares = holdingAgg.totalShares || 0;
+			const totalInvestmentForHoldingEUR = holdingAgg.aggregatedTotalCostInEUR || 0;
+			const avgCostPerShareEUR = totalShares > 0 ? totalInvestmentForHoldingEUR / totalShares : 0;
+			const currentTotalValueEUR = totalShares * currentPriceEUR;
+			const totalProfitLossEUR = currentTotalValueEUR - totalInvestmentForHoldingEUR;
+			const percentageReturn = totalInvestmentForHoldingEUR > 0 ? (totalProfitLossEUR / totalInvestmentForHoldingEUR) * 100 : 0;
 
 			return {
-				symbol,
+				symbol: symbolKey,
+				name: holdingAgg.name,
 				totalShares,
-				avgCostPerShare,
+				avgCostPerShare: avgCostPerShareEUR,
 				currentPrice: currentPriceEUR,
-				totalValue: totalValueEUR,
-				totalCost: totalCostEUR,
-				totalProfitLoss,
+				totalValue: currentTotalValueEUR,
+				totalCost: totalInvestmentForHoldingEUR,
+				totalProfitLoss: totalProfitLossEUR,
 				percentageReturn,
 				tradingCurrency: 'EUR'
 			};
 		});
 
+		let globalTotalInvestment = 0;
+		let globalCurrentTotalValue = 0;
+		aggregatedHoldings.forEach(h => {
+			globalTotalInvestment += h.totalCost;
+			globalCurrentTotalValue += h.totalValue;
+		});
+		const globalTotalProfitLoss = globalCurrentTotalValue - globalTotalInvestment;
+		const globalPercentageReturn = globalTotalInvestment > 0 ? (globalTotalProfitLoss / globalTotalInvestment) * 100 : 0;
+
 		return NextResponse.json({
 			success: true,
-			data: aggregatedHoldings
+			data: aggregatedHoldings,
+			summary: {
+				totalInvestment: globalTotalInvestment,
+				currentTotalValue: globalCurrentTotalValue,
+				totalProfitLoss: globalTotalProfitLoss,
+				percentageReturn: globalPercentageReturn
+			}
 		});
 
 	} catch (error) {

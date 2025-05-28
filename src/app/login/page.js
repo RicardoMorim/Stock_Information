@@ -42,7 +42,6 @@ export default function Login() {
 
   return (
     <>
-      <Navbar />
       <div className="container mx-auto flex-grow flex items-center justify-center">
         <div className="w-full max-w-md p-6 bg-navyBlue text-white rounded shadow-lg">
           <h1 className="text-2xl font-bold text-center mb-6">Login</h1>
@@ -82,7 +81,6 @@ export default function Login() {
           </p>
         </div>
       </div>
-      <Footer />
     </>
   );
 }

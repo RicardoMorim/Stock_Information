@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 
-// Import new components
-import PortfolioSkeleton from '@/app/components/Portfolio/PortfolioSkeleton'; // Already existed, ensure path is correct
+import PortfolioSkeleton from '@/app/components/Portfolio/PortfolioSkeleton'; 
 import PortfolioHeader from '@/app/components/Portfolio/PortfolioHeader';
 import AddStockForm from '@/app/components/Portfolio/AddStockForm';
 import PortfolioTable from '@/app/components/Portfolio/PortfolioTable';
@@ -20,7 +20,16 @@ export default function PortfolioPage() {
 		// setIsLoading(true); // Only set true on initial load or full refresh
 		setError(null);
 		try {
-			const response = await fetch('/api/portfolio');
+			const token = localStorage.getItem("token"); // Get token
+
+			const headers = {
+				'Content-Type': 'application/json',
+			};
+			if (token) {
+				headers['Authorization'] = `Bearer ${token}`;
+			}
+
+			const response = await fetch('/api/portfolio', { headers }); // Pass headers
 			if (!response.ok) {
 				if (response.status === 401) {
 					router.push('/login'); // Redirect to login if not authenticated
@@ -53,9 +62,18 @@ export default function PortfolioPage() {
 		setIsAdding(true);
 		setError(null);
 		try {
+			const token = localStorage.getItem("token"); // Get token
+
+			const headers = {
+				'Content-Type': 'application/json',
+			};
+			if (token) {
+				headers['Authorization'] = `Bearer ${token}`;
+			}
+
 			const response = await fetch('/api/portfolio', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: headers, // Pass headers
 				body: JSON.stringify({ symbol, quantity }),
 			});
 			const data = await response.json();
@@ -81,9 +99,18 @@ export default function PortfolioPage() {
 		setIsSelling(symbol); // Set symbol of stock being sold to manage loading state
 		setError(null);
 		try {
+			const token = localStorage.getItem("token"); // Get token
+
+			const headers = {
+				'Content-Type': 'application/json',
+			};
+			if (token) {
+				headers['Authorization'] = `Bearer ${token}`;
+			}
+
 			const response = await fetch(`/api/portfolio/${encodeURIComponent(symbol)}`, {
 				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
+				headers: headers, // Pass headers
 				body: JSON.stringify({ quantity }),
 			});
 			const data = await response.json();
