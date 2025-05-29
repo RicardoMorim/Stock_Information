@@ -27,246 +27,109 @@ export async function GET(req, { params }) {
 		const userId = getUserIdFromToken(req);
 		await connectToDatabase();
 
-		const symbol = (await params).symbol;
+		const { symbol } = params; // Destructure symbol from params
 
-		// Fetch current price from Alpaca
-		const alpacaResponse = await fetch(
-			`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbol}`,
-			{
-				headers: {
-					'APCA-API-KEY-ID': ALPACA_API_KEY,
-					'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-				},
-			}
-		);
-
-		let currentPrice = 0;
-
-		if (alpacaResponse.ok) {
-			const priceData = await alpacaResponse.json();
-			currentPrice = priceData[symbol]?.latestTrade?.p || 0;
-		}
-
-		// If no data from Alpaca, fetch from Yahoo Finance
-		if (!currentPrice) {
-			const yfinanceResponse = await fetch(
-				`https://yfapi.net/v6/finance/quote?symbols=${symbol}`,
-				{
-					headers: {
-						'X-API-KEY': YH_FINANCE_KEY,
-					},
-				}
-			);
-
-			if (yfinanceResponse.ok) {
-				const yData = await yfinanceResponse.json();
-				currentPrice =
-					yData.quoteResponse.result[0]?.regularMarketPrice || 0;
-			} else {
-				throw new Error(
-					'Failed to fetch price data from both Alpaca and Yahoo Finance'
-				);
-			}
-		}
-
-		// Get portfolio holdings for this symbol
+		// Fetch the portfolio to get specific transaction details for the symbol
 		const portfolio = await Portfolio.findOne({
 			userId,
-			'holdings.symbol': symbol
+			'holdings.symbol': symbol.toUpperCase() // Ensure symbol is uppercase for matching
 		});
 
 		if (!portfolio) {
 			return NextResponse.json({
-				success: true,
-				data: {
-					symbol,
-					currentPrice,
-					holdings: [],
-					totalShares: 0,
-					totalInvestment: 0,
-					totalValue: 0,
-					totalProfit: 0,
-					averageReturn: 0
-				}
-			});
+				success: false,
+				message: `No holdings found for symbol ${symbol}`,
+			}, { status: 404 });
 		}
 
-		// Calculate metrics for each holding of this symbol
-		const symbolHoldings = portfolio.holdings
-			.filter(h => h.symbol === symbol)
-			.map(holding => {
-				const profitLoss = (currentPrice - holding.costPerShare) * holding.shares;
-				const percentageReturn = ((currentPrice / holding.costPerShare - 1) * 100);
-				const currentValue = currentPrice * holding.shares;
+		// Filter out holdings for the specific symbol
+		const symbolHoldings = portfolio.holdings.filter(h => h.symbol === symbol.toUpperCase());
 
-				return {
-					id: holding._id,
-					purchaseDate: holding.purchaseDate,
-					shares: holding.shares,
-					costPerShare: holding.costPerShare,
-					notes: holding.notes,
-					currentPrice,
-					currentValue,
-					profitLoss,
-					percentageReturn
-				};
-			});
+		if (symbolHoldings.length === 0) {
+            return NextResponse.json({
+				success: false,
+				message: `No holdings found for symbol ${symbol} after filtering.`,
+			}, { status: 404 });
+        }
 
-		// Calculate aggregated metrics
-		const totalShares = symbolHoldings.reduce((sum, h) => sum + h.shares, 0);
-		const totalInvestment = symbolHoldings.reduce((sum, h) => sum + (h.shares * h.costPerShare), 0);
-		const totalValue = totalShares * currentPrice;
-		const totalProfit = totalValue - totalInvestment;
-		const averageReturn = (totalProfit / totalInvestment) * 100;
+        // For now, this GET route might be more about fetching details of specific transactions
+        // The main portfolio GET route already provides aggregated data including current prices.
+        // If the goal is to get *individual* transaction details for a symbol, this is the place.
 
 		return NextResponse.json({
 			success: true,
 			data: {
-				symbol,
-				currentPrice,
-				holdings: symbolHoldings,
-				totalShares,
-				totalInvestment,
-				totalValue,
-				totalProfit,
-				averageReturn
+				symbol: symbol.toUpperCase(),
+				holdings: symbolHoldings, // Returns all individual buy transactions for this symbol
 			}
 		});
 
 	} catch (error) {
-		console.error('Error fetching portfolio data:', error);
+		console.error(`Error fetching portfolio data for symbol ${params.symbol}:`, error);
 		return NextResponse.json({
 			success: false,
 			message: error.message
 		}, { status: error.message === 'Invalid token' ? 401 : 500 });
-	}
-}
-
-
-async function fetchStockPrices(symbols) {
-	const prices = {};
-
-	// Try Alpaca first
-	const alpacaResponse = await fetch(
-		`https://data.alpaca.markets/v2/stocks/snapshots?symbols=${symbols.join(',')}`,
-		{
-			headers: {
-				'APCA-API-KEY-ID': ALPACA_API_KEY,
-				'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
-			},
-		}
-	);
-
-	if (alpacaResponse.ok) {
-		const alpacaData = await alpacaResponse.json();
-		for (const symbol of symbols) {
-			if (alpacaData[symbol]?.latestTrade?.p) {
-				prices[symbol] = {
-					price: alpacaData[symbol].latestTrade.p,
-					currency: 'USD' // Alpaca always returns USD
-				};
-			}
-		}
-	}
-
-	// For any symbols not found in Alpaca, try Yahoo Finance
-	const missingSymbols = symbols.filter(symbol => !prices[symbol]);
-	if (missingSymbols.length > 0) {
-		for (const symbol of missingSymbols) {
-			const yahooResponse = await fetch(
-				`https://yfapi.net/v6/finance/quote?symbols=${symbol}`,
-				{
-					headers: {
-						'X-API-KEY': YH_FINANCE_KEY,
-					},
-				}
-			);
-
-			if (yahooResponse.ok) {
-				const yahooData = await yahooResponse.json();
-				const quote = yahooData.quoteResponse?.result?.[0];
-
-				if (quote?.regularMarketPrice) {
-					prices[symbol] = {
-						price: quote.regularMarketPrice,
-						currency: quote.currency || 'USD'
-					};
-				}
-			}
-		}
-	}
-
-	return prices;
-}
-
-async function getExchangeRates() {
-	try {
-		const response = await fetch('https://open.er-api.com/v6/latest/USD');
-		const data = await response.json();
-		return data.rates;
-	} catch (error) {
-		console.error('Error fetching exchange rates:', error);
-		return null;
 	}
 }
 
 export async function DELETE(req, { params }) {
-	try {
-		const userId = getUserIdFromToken(req);
-		const symbol = (await params).symbol;
-		const body = await req.json();
-		const { shares } = body;
+    try {
+        const userId = getUserIdFromToken(req);
+        await connectToDatabase();
+        const { symbol } = params;
+        const { quantity: quantityToSell } = await req.json();
 
-		await connectToDatabase();
+        if (!symbol || typeof quantityToSell !== 'number' || quantityToSell <= 0) {
+            return NextResponse.json({ success: false, message: 'Symbol and valid quantity to sell are required.' }, { status: 400 });
+        }
 
-		// Find the portfolio
-		const portfolio = await Portfolio.findOne({ userId });
-		if (!portfolio) {
-			return NextResponse.json({
-				success: false,
-				message: 'Portfolio not found'
-			}, { status: 404 });
-		}
+        const portfolio = await Portfolio.findOne({ userId });
+        if (!portfolio) {
+            return NextResponse.json({ success: false, message: 'Portfolio not found.' }, { status: 404 });
+        }
 
-		// Find the holding
-		const holdingIndex = portfolio.holdings.findIndex(h => h.symbol === symbol);
-		if (holdingIndex === -1) {
-			return NextResponse.json({
-				success: false,
-				message: 'Position not found'
-			}, { status: 404 });
-		}
+        const holdingsForSymbol = portfolio.holdings
+            .filter(h => h.symbol === symbol.toUpperCase())
+            .sort((a, b) => new Date(a.purchaseDate) - new Date(b.purchaseDate)); // FIFO
 
-		const holding = portfolio.holdings[holdingIndex];
+        let totalSharesForSymbol = holdingsForSymbol.reduce((sum, h) => sum + h.shares, 0);
 
-		// Validate shares amount
-		if (shares > holding.shares) {
-			return NextResponse.json({
-				success: false,
-				message: 'Cannot sell more shares than owned'
-			}, { status: 400 });
-		}
+        if (totalSharesForSymbol < quantityToSell) {
+            return NextResponse.json({ success: false, message: `Not enough shares to sell. You have ${totalSharesForSymbol} ${symbol.toUpperCase()} shares.` }, { status: 400 });
+        }
 
-		if (shares === holding.shares) {
-			// Remove the entire holding
-			portfolio.holdings.splice(holdingIndex, 1);
-		} else {
-			// Update the holding with remaining shares
-			portfolio.holdings[holdingIndex].shares -= shares;
-		}
+        let remainingToSell = quantityToSell;
+        const updatedHoldings = [];
+        const allOtherHoldings = portfolio.holdings.filter(h => h.symbol !== symbol.toUpperCase());
 
-		await portfolio.save();
+        for (const holding of holdingsForSymbol) {
+            if (remainingToSell <= 0) {
+                updatedHoldings.push(holding);
+                continue;
+            }
+            if (holding.shares > remainingToSell) {
+                updatedHoldings.push({
+                    ...holding.toObject(), // Ensure we get a plain object if it's a Mongoose doc
+                    shares: holding.shares - remainingToSell,
+                });
+                remainingToSell = 0;
+            } else {
+                remainingToSell -= holding.shares;
+                // This lot is completely sold, do not add to updatedHoldings
+            }
+        }
 
-		return NextResponse.json({
-			success: true,
-			message: 'Position sold successfully'
-		});
+        portfolio.holdings = [...allOtherHoldings, ...updatedHoldings];
+        await portfolio.save();
 
-	} catch (error) {
-		console.error('Error selling position:', error);
-		return NextResponse.json({
-			success: false,
-			message: error.message
-		}, { status: error.message === 'Invalid token' ? 401 : 500 });
-	}
+        return NextResponse.json({ success: true, message: `${quantityToSell} shares of ${symbol.toUpperCase()} sold successfully.` });
+
+    } catch (error) {
+        console.error('Error selling stock:', error);
+        if (error.message === 'Invalid token' || error.message === 'No token provided') {
+            return NextResponse.json({ success: false, message: error.message }, { status: 401 });
+        }
+        return NextResponse.json({ success: false, message: 'Server error while selling stock' }, { status: 500 });
+    }
 }

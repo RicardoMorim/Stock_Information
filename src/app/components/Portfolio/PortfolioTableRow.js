@@ -9,27 +9,25 @@ export default function PortfolioTableRow({ stock, onSell, isSelling }) {
 
   if (!stock) return null;
 
-  // Align with API response structure
-  const { 
+  const {
     symbol,
-    name, // Name might not be directly in API response for aggregated holdings, ensure it's passed or handled
-    totalShares: quantity, // API sends totalShares, component uses quantity
-    currentPrice: current_price, // API sends currentPrice, component uses current_price
-    totalValue: total_value, // API sends totalValue, component uses total_value
-    avgCostPerShare: avg_cost_per_share, // API sends avgCostPerShare
-    totalCost: total_cost_eur, // API sends totalCost (which is total cost in EUR)
-    totalProfitLoss,
-    percentageReturn
+    name,
+    totalShares,
+    avgCostPerShareInEUR, // From API
+    currentPriceInEUR,    // From API
+    currentTotalValueInEUR, // From API
+    totalInvestmentInEUR, // From API
+    totalProfitLossInEUR,   // From API
+    percentageReturn,       // From API
+    transactions, // Array of individual transactions, if needed for detailed view
   } = stock;
 
-  // Ensure quantity is a number before calculations, default to 0 if not
-  const numQuantity = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 0;
-
-  // avg_cost_per_share is already the average cost in EUR from the API
-  const avgCost = typeof avg_cost_per_share === 'number' ? avg_cost_per_share : 0;
-  
-  // gainLoss and gainLossPercent can directly use totalProfitLoss and percentageReturn from API
-  const gainLoss = typeof totalProfitLoss === 'number' ? totalProfitLoss : 0;
+  const numQuantity = typeof totalShares === 'number' && !isNaN(totalShares) ? totalShares : 0;
+  const avgCost = typeof avgCostPerShareInEUR === 'number' ? avgCostPerShareInEUR : 0;
+  const currentPrice = typeof currentPriceInEUR === 'number' ? currentPriceInEUR : 0;
+  const totalValue = typeof currentTotalValueInEUR === 'number' ? currentTotalValueInEUR : 0;
+  const totalInvestment = typeof totalInvestmentInEUR === 'number' ? totalInvestmentInEUR : 0;
+  const gainLoss = typeof totalProfitLossInEUR === 'number' ? totalProfitLossInEUR : 0;
   const gainLossPercent = typeof percentageReturn === 'number' ? percentageReturn : 0;
   const isGain = gainLoss >= 0;
 
@@ -59,13 +57,17 @@ export default function PortfolioTableRow({ stock, onSell, isSelling }) {
   return (
     <>
       <tr className="border-b border-gray-700 hover:bg-gray-750 transition-colors duration-150 ease-in-out">
-        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-blue-400 font-medium whitespace-nowrap">{name || symbol} ({symbol})</td>
+        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-blue-400 font-medium whitespace-nowrap">
+          {name || symbol} ({symbol})
+          {/* Optionally, display more details from transactions if needed */}
+        </td>
         <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{numQuantity.toLocaleString()}</td>
-        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(avgCost)}</td>
-        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(current_price)}</td>
-        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(total_value)}</td>
+        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(avgCost, 'EUR')}</td>
+        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(currentPrice, 'EUR')}</td>
+        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(totalValue, 'EUR')}</td>
+        <td className="py-4 px-3 md:px-5 text-sm md:text-base text-white text-right whitespace-nowrap">{formatCurrency(totalInvestment, 'EUR')}</td>
         <td className={`py-4 px-3 md:px-5 text-sm md:text-base text-right whitespace-nowrap ${isGain ? 'text-green-400' : 'text-red-400'}`}>
-          {formatCurrency(gainLoss)} ({isGain ? '+' : ''}{gainLossPercent.toFixed(2)}%)
+          {formatCurrency(gainLoss, 'EUR')} ({isGain ? '+' : ''}{gainLossPercent.toFixed(2)}%)
         </td>
         <td className="py-4 px-3 md:px-5 text-center whitespace-nowrap">
           <button

@@ -17,10 +17,11 @@ export default function PortfolioTable({ portfolio, onSell, isSelling }) {
           <tr>
             <th scope="col" className="px-3 py-3 md:px-5 md:py-4 whitespace-nowrap">Name (Symbol)</th>
             <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Quantity</th>
-            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Avg. Cost/Share</th>
-            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Current Price</th>
-            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Total Value</th>
-            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Gain/Loss (%)</th>
+            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Avg. Cost/Share (EUR)</th>
+            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Current Price (EUR)</th>
+            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Total Value (EUR)</th>
+            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Total Investment (EUR)</th>
+            <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-right whitespace-nowrap">Gain/Loss (EUR) (%)</th>
             <th scope="col" className="px-3 py-3 md:px-5 md:py-4 text-center whitespace-nowrap">Actions</th>
           </tr>
         </thead>
