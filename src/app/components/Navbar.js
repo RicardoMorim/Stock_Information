@@ -1,23 +1,31 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "../contexts/AuthContext"; 
 
 export default function Navbar() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem("token");
-    setIsLoggedIn(!!token);
-  }, []);
+  const { user, logout, loading } = useAuth(); 
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    setIsLoggedIn(false);
+    logout(); 
     router.push("/login");
   };
+
+  if (loading) {
+    return (
+      <nav className="bg-gray-900 p-4 shadow-lg sticky top-0 z-50">
+        <div className="container mx-auto flex justify-between items-center">
+          <Link href="/">
+            <span className="text-white font-bold text-2xl hover:text-blue-400 transition-colors">
+              Stock Investor
+            </span>
+          </Link>
+          <div className="text-gray-300">Loading...</div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bg-gray-900 p-4 shadow-lg sticky top-0 z-50">
@@ -29,7 +37,7 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center space-x-6">
-          {isLoggedIn ? (
+          {user ? ( 
             <>
               <Link
                 href="/portfolio"
@@ -43,6 +51,9 @@ export default function Navbar() {
               >
                 Stocks
               </Link>
+              {user.username && (
+                <span className="text-gray-400 text-sm">Hi, {user.username}!</span>
+              )}
               <button
                 onClick={handleLogout}
                 className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
