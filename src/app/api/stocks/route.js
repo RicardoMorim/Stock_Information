@@ -49,6 +49,8 @@ const MAIN_CRYPTO_TICKERS = [
 let cryptoDetails = {};
 
 async function fetchMainStocksData() {
+
+
   const now = Date.now();
   if (
     mainStocksCache.data &&

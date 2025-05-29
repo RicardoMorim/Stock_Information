@@ -1,43 +1,48 @@
 "use client";
-import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-
-import StocksPageSkeleton from '@/app/components/Stock/StocksPageSkeleton';
-import StockSearchBar from '@/app/components/Stock/StockSearchBar';
-import StockCard from '@/app/components/Stock/StockCard';
-import Pagination from '@/app/components/Stock/Pagination';
-
-const ITEMS_PER_PAGE = 12; 
+import StocksPageSkeleton from "@/app/components/Stock/StocksPageSkeleton";
+import StockSearchBar from "@/app/components/Stock/StockSearchBar";
+import StockCard from "@/app/components/Stock/StockCard";
+import Pagination from "@/app/components/Stock/Pagination";
+import { useAuth } from "@/app/contexts/AuthContext";
+const ITEMS_PER_PAGE = 12;
 
 export default function StocksPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [mainStocksData, setMainStocksData] = useState([]);
-  const [searchableList, setSearchableList] = useState([]); 
+  const [searchableList, setSearchableList] = useState([]);
   const [filteredSearchableList, setFilteredSearchableList] = useState([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  const initialQuery = searchParams.get('query') || '';
-  const initialPage = parseInt(searchParams.get('page'), 10) || 1;
+
+  const initialQuery = searchParams.get("query") || "";
+  const initialPage = parseInt(searchParams.get("page"), 10) || 1;
 
   const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [currentPage, setCurrentPage] = useState(initialPage);
-
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchInitialData = async () => {
+      if (!user) {
+        console.error("User not authenticated, redirecting to login.");
+        router.push("/login");
+        return;
+      }
       setIsLoading(true);
       setError(null);
       try {
-      
-        const response = await fetch('/api/stocks'); 
+        const response = await fetch("/api/stocks");
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch initial stock data');
+          throw new Error(
+            errorData.message || "Failed to fetch initial stock data"
+          );
         }
         const data = await response.json();
         if (data.success && data.data) {
@@ -46,10 +51,15 @@ export default function StocksPageClient() {
           setSearchableList(sl);
 
           if (sl.length > 0) {
-            console.log("Sample of searchableList symbols:", sl.slice(0, 10).map(s => s.symbol));
+            console.log(
+              "Sample of searchableList symbols:",
+              sl.slice(0, 10).map((s) => s.symbol)
+            );
           }
         } else {
-          throw new Error(data.message || 'Could not retrieve initial stock data');
+          throw new Error(
+            data.message || "Could not retrieve initial stock data"
+          );
         }
       } catch (err) {
         console.error("Error fetching initial stock data:", err);
@@ -61,45 +71,45 @@ export default function StocksPageClient() {
       }
     };
     fetchInitialData();
-  }, []);
-
+  }, [router, user]);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (searchTerm) {
-      params.set('query', searchTerm);
+      params.set("query", searchTerm);
     }
 
     if (searchTerm && currentPage > 1) {
-      params.set('page', currentPage.toString());
+      params.set("page", currentPage.toString());
     }
- 
+
     router.push(`/stocks?${params.toString()}`, { scroll: false });
   }, [searchTerm, currentPage, router]);
 
-
   const searchResultsPaginated = useMemo(() => {
     if (!searchTerm) {
-      setFilteredSearchableList([]); 
+      setFilteredSearchableList([]);
       return [];
     }
     const lowercasedFilter = searchTerm.toLowerCase();
-    const filtered = searchableList.filter(stock =>
-      (stock.symbol?.toLowerCase().includes(lowercasedFilter)) ||
-      (stock.name?.toLowerCase().includes(lowercasedFilter))
+    const filtered = searchableList.filter(
+      (stock) =>
+        stock.symbol?.toLowerCase().includes(lowercasedFilter) ||
+        stock.name?.toLowerCase().includes(lowercasedFilter)
     );
 
-
     const sortedFiltered = filtered.sort((a, b) => {
-      const aSymbol = a.symbol?.toLowerCase() || '';
-      const bSymbol = b.symbol?.toLowerCase() || '';
-      const aName = a.name?.toLowerCase() || '';
-      const bName = b.name?.toLowerCase() || '';
+      const aSymbol = a.symbol?.toLowerCase() || "";
+      const bSymbol = b.symbol?.toLowerCase() || "";
+      const aName = a.name?.toLowerCase() || "";
+      const bName = b.name?.toLowerCase() || "";
 
       // Priority 1: Exact symbol match
-      if (aSymbol === lowercasedFilter && bSymbol !== lowercasedFilter) return -1;
-      if (bSymbol === lowercasedFilter && aSymbol !== lowercasedFilter) return 1;
-      if (aSymbol === lowercasedFilter && bSymbol === lowercasedFilter) { 
+      if (aSymbol === lowercasedFilter && bSymbol !== lowercasedFilter)
+        return -1;
+      if (bSymbol === lowercasedFilter && aSymbol !== lowercasedFilter)
+        return 1;
+      if (aSymbol === lowercasedFilter && bSymbol === lowercasedFilter) {
         return aSymbol.localeCompare(bSymbol);
       }
 
@@ -108,7 +118,7 @@ export default function StocksPageClient() {
       const bSymbolStartsWith = bSymbol.startsWith(lowercasedFilter);
       if (aSymbolStartsWith && !bSymbolStartsWith) return -1;
       if (bSymbolStartsWith && !aSymbolStartsWith) return 1;
-      if (aSymbolStartsWith && bSymbolStartsWith) { 
+      if (aSymbolStartsWith && bSymbolStartsWith) {
         return aSymbol.localeCompare(bSymbol);
       }
 
@@ -117,12 +127,12 @@ export default function StocksPageClient() {
       const bNameStartsWith = bName.startsWith(lowercasedFilter);
       if (aNameStartsWith && !bNameStartsWith) return -1;
       if (bNameStartsWith && !aNameStartsWith) return 1;
-      if (aNameStartsWith && bNameStartsWith) { 
+      if (aNameStartsWith && bNameStartsWith) {
         const nameComparison = aName.localeCompare(bName);
         if (nameComparison !== 0) return nameComparison;
         return aSymbol.localeCompare(bSymbol);
       }
-      
+
       // Priority 4: Symbol includes search term (but doesn't start with)
       const aSymbolIncludes = aSymbol.includes(lowercasedFilter);
       const bSymbolIncludes = bSymbol.includes(lowercasedFilter);
@@ -134,8 +144,8 @@ export default function StocksPageClient() {
       if (symbolComparison !== 0) return symbolComparison;
       return aName.localeCompare(bName);
     });
-    
-    setFilteredSearchableList(sortedFiltered); 
+
+    setFilteredSearchableList(sortedFiltered);
 
     const firstPageIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const lastPageIndex = firstPageIndex + ITEMS_PER_PAGE;
@@ -144,12 +154,12 @@ export default function StocksPageClient() {
 
   const handleSearch = useCallback((query) => {
     setSearchTerm(query);
-    setCurrentPage(1); 
+    setCurrentPage(1);
   }, []);
 
   const handlePageChange = useCallback((pageNumber) => {
     setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   if (isLoading) {
@@ -160,9 +170,11 @@ export default function StocksPageClient() {
     return (
       <div className="container mx-auto p-6 bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center">
         <p className="text-2xl text-red-500 mb-4">Error: {error}</p>
-        <p className="text-gray-400 mb-6">Could not load stock data. Please try again later.</p>
+        <p className="text-gray-400 mb-6">
+          Could not load stock data. Please try again later.
+        </p>
         <button
-          onClick={() => router.push('/')}
+          onClick={() => router.push("/")}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
         >
           Go to Homepage
@@ -173,13 +185,19 @@ export default function StocksPageClient() {
 
   // Determine what to display: initial main stocks or search results
   const displayData = searchTerm ? searchResultsPaginated : mainStocksData;
-  const totalPages = searchTerm ? Math.ceil(filteredSearchableList.length / ITEMS_PER_PAGE) : 0; 
+  const totalPages = searchTerm
+    ? Math.ceil(filteredSearchableList.length / ITEMS_PER_PAGE)
+    : 0;
 
   return (
     <div className="container mx-auto p-4 md:p-6 bg-gray-900 text-white min-h-screen">
       <header className="mb-8 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold text-blue-400">Explore Stocks</h1>
-        <p className="text-lg md:text-xl text-gray-400 mt-2">Find your next investment opportunity.</p>
+        <h1 className="text-4xl md:text-5xl font-bold text-blue-400">
+          Explore Stocks
+        </h1>
+        <p className="text-lg md:text-xl text-gray-400 mt-2">
+          Find your next investment opportunity.
+        </p>
       </header>
 
       <StockSearchBar onSearch={handleSearch} initialQuery={searchTerm} />
@@ -193,9 +211,13 @@ export default function StocksPageClient() {
       ) : (
         <div className="text-center py-10">
           {searchTerm ? (
-            <p className="text-xl text-gray-500">No stocks found matching your criteria: &quot;{searchTerm}&quot;.</p>
+            <p className="text-xl text-gray-500">
+              No stocks found matching your criteria: &quot;{searchTerm}&quot;.
+            </p>
           ) : (
-            <p className="text-xl text-gray-500">No featured stocks available at the moment.</p> // Message if mainStocksData is empty and no search
+            <p className="text-xl text-gray-500">
+              No featured stocks available at the moment.
+            </p> // Message if mainStocksData is empty and no search
           )}
         </div>
       )}
