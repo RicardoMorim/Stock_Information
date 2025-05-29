@@ -21,12 +21,12 @@ const portfolioSchema = new mongoose.Schema({
             required: true,
             min: 0
         },
-        costInEUR: {  // Store cost in EUR
+        costInEUR: {  
             type: Number,
             required: true,
             min: 0
         },
-        tradingCurrency: {  // Original trading currency
+        tradingCurrency: { 
             type: String,
             required: true,
             enum: ['USD', 'EUR', 'PLN', 'GBP']
@@ -44,7 +44,7 @@ const portfolioSchema = new mongoose.Schema({
 
 portfolioSchema.index({ userId: 1 }); 
 
-// Middleware to validate costInEUR
+
 portfolioSchema.pre('save', function(next) {
     this.holdings.forEach((holding) => {
         if (isNaN(holding.costInEUR)) {

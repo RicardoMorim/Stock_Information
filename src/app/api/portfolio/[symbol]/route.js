@@ -27,12 +27,11 @@ export async function GET(req, { params }) {
 		const userId = getUserIdFromToken(req);
 		await connectToDatabase();
 
-		const { symbol } = params; // Destructure symbol from params
+		const { symbol } = params; 
 
-		// Fetch the portfolio to get specific transaction details for the symbol
 		const portfolio = await Portfolio.findOne({
 			userId,
-			'holdings.symbol': symbol.toUpperCase() // Ensure symbol is uppercase for matching
+			'holdings.symbol': symbol.toUpperCase()
 		});
 
 		if (!portfolio) {
@@ -51,10 +50,6 @@ export async function GET(req, { params }) {
 				message: `No holdings found for symbol ${symbol} after filtering.`,
 			}, { status: 404 });
         }
-
-        // For now, this GET route might be more about fetching details of specific transactions
-        // The main portfolio GET route already provides aggregated data including current prices.
-        // If the goal is to get *individual* transaction details for a symbol, this is the place.
 
 		return NextResponse.json({
 			success: true,
@@ -110,7 +105,7 @@ export async function DELETE(req, { params }) {
             }
             if (holding.shares > remainingToSell) {
                 updatedHoldings.push({
-                    ...holding.toObject(), // Ensure we get a plain object if it's a Mongoose doc
+                    ...holding.toObject(), 
                     shares: holding.shares - remainingToSell,
                 });
                 remainingToSell = 0;

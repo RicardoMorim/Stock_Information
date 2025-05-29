@@ -158,23 +158,23 @@ async function fetchStockPrices(symbols) {
 
 async function getExchangeRates() {
 	try {
-		// Using a more reliable and free API for exchange rates
+
 		const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
 		if (!response.ok) {
 			console.error(`Error fetching exchange rates: ${response.status} ${response.statusText}`);
 			// Fallback or default rates if API fails
-			return { 'EUR': 0.93, 'USD': 1, 'PLN': 4.0, 'GBP': 0.8 }; // Example fallback
+			return { 'EUR': 0.93, 'USD': 1, 'PLN': 4.0, 'GBP': 0.8 }; 
 		}
 		const data = await response.json();
 		if (data && data.rates) {
 			return data.rates;
 		} else {
 			console.error('Error fetching exchange rates: Invalid data format');
-			return { 'EUR': 0.93, 'USD': 1, 'PLN': 4.0, 'GBP': 0.8 }; // Example fallback
+			return { 'EUR': 0.93, 'USD': 1, 'PLN': 4.0, 'GBP': 0.8 }; 
 		}
 	} catch (error) {
 		console.error('Error fetching exchange rates:', error);
-		return { 'EUR': 0.93, 'USD': 1, 'PLN': 4.0, 'GBP': 0.8 }; // Example fallback in case of network or other errors
+		return { 'EUR': 0.93, 'USD': 1, 'PLN': 4.0, 'GBP': 0.8 }; 
 	}
 }
 

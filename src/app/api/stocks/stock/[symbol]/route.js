@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/app/utils/db";
 import Stock from "@/app/models/Stock";
-import { fetchAlphaVantageNews, fetchAlphaVantageStockData, getAlphaVantageHistoricalDaily } from "@/app/utils/alphaVantage"; // Added getAlphaVantageHistoricalDaily
-import { getPolygonSnapshot, fetchPolygonNews, fetchPolygonHistoricalData } from "@/app/utils/polygon"; // Import Polygon utility
-import { getYahooFinanceHistoricalData, getYahooFinanceNews } from "@/app/utils/yahooFinance"; // Import Yahoo Finance utils
+import { fetchAlphaVantageNews, fetchAlphaVantageStockData, getAlphaVantageHistoricalDaily } from "@/app/utils/alphaVantage"; 
+import { getPolygonSnapshot, fetchPolygonNews, fetchPolygonHistoricalData } from "@/app/utils/polygon"; 
+import { getYahooFinanceHistoricalData, getYahooFinanceNews } from "@/app/utils/yahooFinance"; 
 
 const POLYGON_API_KEY = process.env.POLYGON_KEY;
 const ALPACA_API_KEY = process.env.ALPACA_KEY;
@@ -70,7 +70,7 @@ export async function GET(req, { params }) {
               h: result.regularMarketDayHigh,
               l: result.regularMarketDayLow,
               v: result.regularMarketVolume,
-              vw: result.regularMarketPrice, // VWAP not available
+              vw: result.regularMarketPrice, 
             },
             prevDailyBar: {
               c: result.regularMarketPreviousClose,
@@ -96,7 +96,7 @@ export async function GET(req, { params }) {
       // Try Polygon.io first
       try {
         console.log(`Trying Polygon.io for ${symbol}...`);
-        const polygonData = await getPolygonSnapshot(symbol); // This function is in /utils/polygon.js
+        const polygonData = await getPolygonSnapshot(symbol); 
         if (polygonData && polygonData.price !== null && polygonData.price !== undefined) {
             console.log(`Found ${symbol} in Polygon.io:`, polygonData);
             snapshotDetails = {
@@ -116,7 +116,6 @@ export async function GET(req, { params }) {
             type = polygonData.type;
             exchange = polygonData.primary_exchange;
         } else if (polygonData === null) {
-          // getPolygonSnapshot explicitly returned null (e.g. 403 or other error handled inside it)
           console.log(`getPolygonSnapshot returned null for ${symbol}, proceeding to fallbacks.`);
         }
       } catch (polygonError) {
@@ -128,8 +127,8 @@ export async function GET(req, { params }) {
       // Try Alpaca second, if Polygon failed or didn't provide data
       if (!snapshotDetails) {
         console.log(`Polygon.io failed or no data for ${symbol}, trying Alpaca...`);
-        source = 'Alpaca'; // Default to Alpaca if we attempt it
-        isDelayed = false;  // Alpaca real-time for subscribers
+        source = 'Alpaca'; 
+        isDelayed = false; 
         try {
           if (!isCrypto) {
             const alpacaResponse = await fetch(
@@ -154,7 +153,6 @@ export async function GET(req, { params }) {
               console.warn(`Alpaca API error for ${symbol}: ${alpacaResponse.status}`);
             }
           }
-          // Add similar logic for Alpaca crypto if needed, or assume it's handled by general crypto logic
         } catch (alpacaError) {
           console.error(`Error fetching from Alpaca for ${symbol}:`, alpacaError.message);
         }
@@ -164,7 +162,7 @@ export async function GET(req, { params }) {
       if (!snapshotDetails) {
         console.log(`Alpaca failed or no data for ${symbol}, trying Yahoo Finance...`);
         try {
-          const yahooData = await fetchYahooData(symbol); // fetchYahooData is defined above
+          const yahooData = await fetchYahooData(symbol); 
           if (yahooData && yahooData[symbol]) {
             console.log(`Found ${symbol} in Yahoo:`, yahooData[symbol]);
             snapshotDetails = yahooData[symbol]; // Already includes source and isDelayed
@@ -181,7 +179,7 @@ export async function GET(req, { params }) {
       if (!snapshotDetails) {
         console.log(`Yahoo failed or no data for ${symbol}, trying Alpha Vantage...`);
         try {
-          const alphaVantageData = await fetchAlphaVantageStockData(symbol); // from /utils/alphaVantage.js
+          const alphaVantageData = await fetchAlphaVantageStockData(symbol); 
           if (alphaVantageData) {
             console.log(`Found ${symbol} in Alpha Vantage:`, alphaVantageData);
             snapshotDetails = {
@@ -218,14 +216,14 @@ export async function GET(req, { params }) {
         return null; // Explicitly return null if no data found
       }
       
-      // Consolidate and return
+      // Consolidate and return ensuring values are passed through
       return { 
         ...snapshotDetails, 
         source: source, 
         isDelayed: isDelayed,
-        name: name || snapshotDetails.name, // Ensure name is carried through
-        type: type || snapshotDetails.type, // Ensure type is carried through
-        exchange: exchange || snapshotDetails.exchange // Ensure exchange is carried through
+        name: name || snapshotDetails.name, 
+        type: type || snapshotDetails.type, 
+        exchange: exchange || snapshotDetails.exchange 
       };
     };
 
@@ -634,18 +632,9 @@ export async function GET(req, { params }) {
       );
     }
 
-    // const snapshotData = await fetchSnapshot(symbol, isCrypto); // Already fetched as snapshot
+    const snapshotDataToUse = snapshot; 
 
-    // if (!snapshotData) { // Redundant check
-    //   return NextResponse.json(
-    //     { success: false, message: "Asset not found." },
-    //     { status: 404 }
-    //   );
-    // }
-    
-    const snapshotDataToUse = snapshot; // This line should use the result of fetchSnapshot
 
-    // Ensure historicalData is an object with a 'data' array and 'source'
     let historicalDataResult = await fetchHistoricalData(symbol, isCrypto);
     if (!historicalDataResult || typeof historicalDataResult !== 'object' || !Array.isArray(historicalDataResult.data)) {
         console.warn(`Historical data for ${symbol} was invalid, setting to empty. Received:`, historicalDataResult);
@@ -656,7 +645,7 @@ export async function GET(req, { params }) {
     const assetDetails = await fetchAssetDetails(symbol);
 
     // Fetch fundamental metrics
-    const fundamentalMetrics = await fetchFundamentalMetrics(symbol); // Uncommented and fetched
+    const fundamentalMetrics = await fetchFundamentalMetrics(symbol); 
 
     // Fetch dividend yield data
     // We need the current price for dividend yield calculation, use snapshot's price
@@ -684,7 +673,7 @@ export async function GET(req, { params }) {
                 : null,
         changePercent: snapshotDataToUse.dailyBar?.c && snapshotDataToUse.prevDailyBar?.c && snapshotDataToUse.prevDailyBar.c !== 0
                        ? ((snapshotDataToUse.dailyBar.c - snapshotDataToUse.prevDailyBar.c) / snapshotDataToUse.prevDailyBar.c) * 100
-                       : (snapshotDataToUse.todaysChangePerc ?? null), // Fallback to todaysChangePerc if available
+                       : (snapshotDataToUse.todaysChangePerc ?? null), 
         high: snapshotDataToUse.dailyBar?.h || null,
         low: snapshotDataToUse.dailyBar?.l || null,
         open: snapshotDataToUse.dailyBar?.o || null,
@@ -692,45 +681,28 @@ export async function GET(req, { params }) {
         volume: snapshotDataToUse.dailyBar?.v || null,
         vwap: snapshotDataToUse.dailyBar?.vw || null, // VWAP might not be available from all sources
         historicalData: historicalDataResult.data,
-        historicalDataSource: historicalDataResult.source, // Added
+        historicalDataSource: historicalDataResult.source, 
         news: Array.isArray(newsData) ? newsData : [], // Ensure news is always an array
         
         // Integrate fundamental and dividend data
         fundamentals: {
-          // Assuming fetchFundamentalMetrics returns an array, we might want the latest.
-          // For now, let's pass the first item if available, or an empty object.
-          // The structure of fundamentalMetrics needs to be known to map correctly.
-          // Based on fetchFundamentalMetrics, it returns an array of objects with:
-          // income, cashFlow, balance, comprehensive, companyInfo, period
-          // Let's assume we take the most recent (first in the array if sorted desc by date)
+       
           latestFinancials: fundamentalMetrics && fundamentalMetrics.length > 0 ? fundamentalMetrics[0] : {},
-          // Extract specific common metrics if available directly from Polygon's Ticker Details or similar
-          // For example, market cap, P/E, EPS are often part of "ticker details" or "quote" endpoints in some APIs.
-          // Polygon's /vX/reference/financials gives raw statement data.
-          // We might need to calculate P/E, EPS, etc., or rely on Polygon providing them elsewhere.
-          // For now, KeyMetrics.js expects specific fields like market_capitalization, price_earnings_ratio.
-          // Let's see what `fetchFundamentalMetrics` actually provides.
-          // The `fetchFundamentalMetrics` in the provided code returns an array of financials.
-          // The `KeyMetrics.js` component expects `metrics.fundamentals?.market_capitalization?.value`
-          // This implies the API should structure it like that.
-          // Let's adjust based on what Polygon /vX/reference/financials actually returns.
-          // Typically, you'd get market_cap, P/E, EPS from a different endpoint or calculate them.
-          // For now, we'll pass what we have and adjust KeyMetrics.js or this API later.
-          rawFinancials: fundamentalMetrics, // Pass the whole array for now
+          rawFinancials: fundamentalMetrics,
         },
         dividendInfo: dividendYieldData && !dividendYieldData.error ? {
-            yield: dividendYieldData.dividendYield, // e.g., 2.5 for 2.5%
+            yield: dividendYieldData.dividendYield, 
             annualAmount: dividendYieldData.annualDividendAmount,
-            // Add other dividend details if needed
+  
         } : { yield: null, annualAmount: null },
 
         // secFilings: filings, // Placeholder for SEC filings
-        source: snapshotDataToUse.source || 'N/A', // Source of the snapshot data
-        isDelayed: snapshotDataToUse.isDelayed || false, // Whether the snapshot data is delayed
+        source: snapshotDataToUse.source || 'N/A', 
+        isDelayed: snapshotDataToUse.isDelayed || false, 
       },
     };
 
-    // After fetching and processing all data into responseData
+
     const currentDataToCache = { success: true, data: responseData };
     stockDataCache.set(symbol, {
       data: currentDataToCache,

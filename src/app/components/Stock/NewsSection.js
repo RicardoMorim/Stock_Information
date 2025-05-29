@@ -38,9 +38,9 @@ const NewsArticleCard = ({ article, index }) => {
                 <Image
                     src={finalImageUrl}
                     alt={displayTitle}
-                    fill // Replaces layout="fill" and objectFit="cover"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Example sizes, adjust as needed
-                    className="transition-transform duration-300 ease-in-out hover:scale-105 object-cover" // Added object-cover here
+                    fill 
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
+                    className="transition-transform duration-300 ease-in-out hover:scale-105 object-cover"
                 />
             </div>
             <div className="p-5 md:w-2/3 flex flex-col justify-between">
@@ -75,7 +75,7 @@ const NewsArticleCard = ({ article, index }) => {
     );
 };
 
-const NewsSection = ({ news, symbol }) => { // Added symbol for context if needed, though not used in current logic
+const NewsSection = ({ news, symbol }) => { 
     if (!news || news.length === 0) {
         return (
             <section className="mt-8 p-4 md:p-6 bg-gray-800 rounded-lg shadow-xl">
@@ -85,7 +85,6 @@ const NewsSection = ({ news, symbol }) => { // Added symbol for context if neede
         );
     }
 
-    // Check if any news item is from Alpha Vantage and is delayed
     const hasAlphaVantageDelayedNews = news.some(item => item.source_api === 'Alpha Vantage' && item.isDelayed);
 
     return (

@@ -12,7 +12,6 @@ export default function Login() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    // Redirect to /stocks if user is already logged in
     const token = localStorage.getItem("token");
     if (token) {
       router.push("/stocks");
@@ -31,7 +30,7 @@ export default function Login() {
       if (res.ok) {
         setMessage("Login successful!");
         localStorage.setItem("token", data.token);
-        router.push("/stocks"); // Redirect after successful login
+        router.push("/stocks"); 
       } else {
         setMessage(data.error);
       }

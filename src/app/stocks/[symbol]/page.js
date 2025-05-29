@@ -2,24 +2,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import Image from 'next/image'; // Keep for SEC Filing modal if it uses <Image>
+import Image from 'next/image'; 
 
-// Import new components
 import StockDetailsSkeleton from '@/app/components/Stock/StockDetailsSkeleton';
 import StockHeader from '@/app/components/Stock/StockHeader';
 import PriceChart from '@/app/components/Stock/PriceChart';
 import KeyMetrics from '@/app/components/Stock/KeyMetrics';
 import NewsSection from '@/app/components/Stock/NewsSection';
-import SECFilingsSection from '@/app/components/Stock/SECFilingsSection'; // Added import
-import FilingViewModal from '@/app/components/Stock/FilingViewModal'; // Added import
+import SECFilingsSection from '@/app/components/Stock/SECFilingsSection'; 
+import FilingViewModal from '@/app/components/Stock/FilingViewModal'; 
 
-// Caching functions (can be moved to a utils/cache.js if used elsewhere)
+
 const getCachedData = (symbol, type) => {
 	try {
 		const data = localStorage.getItem(`stock_${symbol}_${type}`);
 		if (!data) return null;
 		const { value, timestamp } = JSON.parse(data);
-		if (Date.now() - timestamp > 24 * 60 * 60 * 1000 * 2) {
+		if (Date.now() - timestamp > 15 * 60 * 1000) {
 			localStorage.removeItem(`stock_${symbol}_${type}`);
 			return null;
 		}
@@ -43,21 +42,18 @@ const setCachedData = (symbol, type, data) => {
 
 export default function StockDetails() {
 	const params = useParams();
-	const symbol = params?.symbol; // Already decoded by Next.js router
+	const symbol = params?.symbol;
 	const router = useRouter();
 
 	const [stockData, setStockData] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState(null);
-	// const [selectedPeriod, setSelectedPeriod] = useState(0); // This state seems unused, consider removing if not needed
 	const [showFiling, setShowFiling] = useState(false);
 	const [filingDetails, setFilingDetails] = useState(null);
 	const [filingIsLoading, setFilingIsLoading] = useState(false);
 
-
 	useEffect(() => {
 		if (!symbol) {
-			// router.push("/stocks"); // Or handle as an error, as symbol should always be present
 			setError("Symbol not provided.");
 			setIsLoading(false);
 			return;
@@ -67,30 +63,30 @@ export default function StockDetails() {
 			setIsLoading(true);
 			setError(null);
 			try {
-				// Check cache first - implement robust caching if needed
-				// const cachedFinancials = getCachedData(symbol, 'financials');
-				// if (cachedFinancials) {
-				// setStockData(cachedFinancials);
-				// setIsLoading(false);
-				// return;
-				// }
+				// Check cache first
+				const cachedStockData = getCachedData(symbol, 'details');
+				if (cachedStockData) {
+					console.log(`Using cached data for ${symbol}`);
+					setStockData(cachedStockData);
+					setIsLoading(false);
+					return;
+				}
 
+				console.log(`Fetching fresh data for ${symbol}`);
 				const response = await fetch(`/api/stocks/stock/${encodeURIComponent(symbol)}`);
 				if (!response.ok) {
 					const errorData = await response.json();
 					throw new Error(errorData.message || `Failed to fetch stock data for ${symbol}`);
 				}
-				const apiResponse = await response.json(); // Renamed from data to apiResponse
-
-				// Expected structure: apiResponse = { success: true, data: { success: true, data: { STOCK_PROPERTIES } } }
-				// So, apiResponse.data is { success: true, data: { STOCK_PROPERTIES } }
-				// And apiResponse.data.data is { STOCK_PROPERTIES }
+				const apiResponse = await response.json();
 
 				if (apiResponse.success && apiResponse.data && typeof apiResponse.data === 'object' && apiResponse.data.data) {
-					// The large log previously here has been removed.
-					// console.log("StockDetails page: Raw data.data from API:", JSON.stringify(apiResponse.data, null, 2)); // This was the large log
 					console.log("StockDetails page: Extracted stock properties from apiResponse.data.data:", JSON.stringify(apiResponse.data.data, null, 2));
-					setStockData(apiResponse.data.data); // Use the deeply nested data object
+					
+					// Cache the data
+					setCachedData(symbol, 'details', apiResponse.data.data);
+					
+					setStockData(apiResponse.data.data);
 				} else if (apiResponse.success && apiResponse.data && !apiResponse.data.data) {
 					console.error("API success true, outer data object (apiResponse.data) present, but inner data payload (apiResponse.data.data) is missing:", apiResponse.data);
 					throw new Error('Received success from API but the crucial inner data payload is missing.');
@@ -116,20 +112,32 @@ export default function StockDetails() {
 		setFilingIsLoading(true);
 		setShowFiling(true);
 		setFilingDetails(null);
+		
 		try {
+			// Check cache for filing details
+			const cachedFilingData = getCachedData(url, 'filing');
+			if (cachedFilingData) {
+				console.log(`Using cached filing data for ${url}`);
+				setFilingDetails(cachedFilingData);
+				setFilingIsLoading(false);
+				return;
+			}
+
+			console.log(`Fetching fresh filing data for ${url}`);
 			const response = await fetch(`/api/stocks/filings/${encodeURIComponent(url)}`);
 			if (!response.ok) {
 				throw new Error('Failed to fetch filing details');
 			}
 			const data = await response.json();
 			if (data.success) {
+				// Cache the filing data
+				setCachedData(url, 'filing', data.data);
 				setFilingDetails(data.data);
 			} else {
 				throw new Error(data.message || 'Could not retrieve filing details');
 			}
 		} catch (err) {
 			console.error("Error fetching filing details:", err);
-			// Optionally set an error state for the modal
 		} finally {
 			setFilingIsLoading(false);
 		}
@@ -137,9 +145,8 @@ export default function StockDetails() {
 
 	const handleCloseModal = () => {
 		setShowFiling(false);
-		setFilingDetails(null); // Clear details when closing
+		setFilingDetails(null);
 	};
-
 
 	if (isLoading) {
 		return <StockDetailsSkeleton />;
@@ -159,7 +166,6 @@ export default function StockDetails() {
 		);
 	}
 
-	// Log stockData before rendering
 	console.log(`StockDetails page rendering. isLoading: ${isLoading}, error: ${error}`);
 	if (stockData) {
 		console.log("StockDetails page stockData state before render (first 500 chars):", JSON.stringify(stockData, null, 2).substring(0, 500));
@@ -195,8 +201,8 @@ export default function StockDetails() {
 		vwap,
 		fundamentals,
 		secFilings,
-		source, // Added
-		isDelayed // Added
+		source,
+		isDelayed
 	} = stockData;
 
 	const keyMetricsData = { high, low, volume, vwap, fundamentals };
@@ -212,15 +218,14 @@ export default function StockDetails() {
 				price={price}
 				changePercent={changePercent}
 				type={type}
-				source={source} // Added
-				isDelayed={isDelayed} // Added
+				source={source}
+				isDelayed={isDelayed}
 			/>
 
 			<PriceChart historicalData={historicalData} symbol={symbol} />
 
 			<KeyMetrics metrics={keyMetricsData} />
 			
-			{/* Ensure news is an array before passing to NewsSection */}
 			{Array.isArray(news) && news.length > 0 && <NewsSection news={news} symbol={symbol} />}
 
 			{secFilings && secFilings.length > 0 && (

@@ -8,7 +8,7 @@ import AddStockForm from '@/app/components/Portfolio/AddStockForm';
 import PortfolioTable from '@/app/components/Portfolio/PortfolioTable';
 
 export default function PortfolioPage() {
-    console.log("[PortfolioPage] Component rendering or re-rendering."); // Page Log 1
+    console.log("[PortfolioPage] Component rendering or re-rendering.");
 
     const [portfolio, setPortfolio] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -18,8 +18,8 @@ export default function PortfolioPage() {
     const router = useRouter();
 
     const fetchPortfolio = useCallback(async () => {
-        console.log("[PortfolioPage] fetchPortfolio called."); // Page Log 2
-        // setIsLoading(true); // Already set before initial call
+        console.log("[PortfolioPage] fetchPortfolio called."); 
+
         setError(null);
         try {
             const token = localStorage.getItem("token");
@@ -37,9 +37,9 @@ export default function PortfolioPage() {
                 throw new Error(errorData.message || 'Failed to fetch portfolio');
             }
             const data = await response.json();
-            console.log("[PortfolioPage] API response data in fetchPortfolio:", data); // Page Log 3
+            console.log("[PortfolioPage] API response data in fetchPortfolio:", data); 
             if (data.success) {
-                setPortfolio(data); // portfolio state is { success: true, data: [...], summary: {...} }
+                setPortfolio(data);
             } else {
                 throw new Error(data.message || 'Could not retrieve portfolio data from API');
             }
@@ -48,12 +48,12 @@ export default function PortfolioPage() {
             setError(err.message);
         } finally {
             setIsLoading(false);
-            console.log("[PortfolioPage] fetchPortfolio finished, isLoading set to false."); // Page Log 4
+            console.log("[PortfolioPage] fetchPortfolio finished, isLoading set to false."); 
         }
     }, [router]);
 
     useEffect(() => {
-        console.log("[PortfolioPage] useEffect for initial fetchPortfolio triggered."); // Page Log 5
+        console.log("[PortfolioPage] useEffect for initial fetchPortfolio triggered.");
         setIsLoading(true);
         fetchPortfolio();
     }, [fetchPortfolio]);
@@ -73,7 +73,7 @@ export default function PortfolioPage() {
             const response = await fetch('/api/portfolio', {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify(stockData), // Send all new fields
+                body: JSON.stringify(stockData),
             });
             const data = await response.json();
             if (!response.ok) {
@@ -93,10 +93,10 @@ export default function PortfolioPage() {
     };
 
     const handleSellStock = async (symbol, quantity) => {
-        setIsSelling(symbol); // Set symbol of stock being sold to manage loading state
+        setIsSelling(symbol);
         setError(null);
         try {
-            const token = localStorage.getItem("token"); // Get token
+            const token = localStorage.getItem("token"); 
 
             const headers = {
                 'Content-Type': 'application/json',
@@ -115,16 +115,16 @@ export default function PortfolioPage() {
                 throw new Error(data.message || 'Failed to sell stock');
             }
             if (data.success) {
-                // Re-fetch portfolio to reflect changes
+                // refetch portfolio to reflect changes
                 await fetchPortfolio();
             } else {
                 throw new Error(data.message || 'Could not sell stock');
             }
         } catch (err) {
             console.error("Error selling stock:", err);
-            setError(err.message); // Display error to user
+            setError(err.message); 
         } finally {
-            setIsSelling(null); // Reset selling state
+            setIsSelling(null);
         }
     };
 
@@ -147,7 +147,7 @@ export default function PortfolioPage() {
         };
     }, [portfolio]);
 
-    console.log("[PortfolioPage] Current portfolio state before render:", portfolio); // Page Log 8
+    console.log("[PortfolioPage] Current portfolio state before render:", portfolio); 
     console.log("[PortfolioPage] Data passed to PortfolioTable (portfolio?.data):", portfolio?.data); // Page Log 9
     console.log("[PortfolioPage] Summary passed to PortfolioHeader (portfolioSummary):", portfolioSummary); // Page Log 10
 
@@ -176,7 +176,7 @@ export default function PortfolioPage() {
             </div>
         );
     }
-    console.log("[PortfolioPage] Proceeding to render main portfolio view."); // Page Log 13
+    console.log("[PortfolioPage] Proceeding to render main portfolio view."); 
 
     return (
         <div className="container mx-auto p-4 md:p-6 bg-gray-900 text-white min-h-screen">
@@ -200,12 +200,12 @@ export default function PortfolioPage() {
             {isLoading && portfolio?.data && (
                 <div className="text-center py-4">
                     <p className="text-lg text-blue-400">Refreshing portfolio data...</p>
-                    {/* You could add a small spinner here too */}
+
                 </div>
             )}
 
             <PortfolioTable
-                portfolio={portfolio?.data || []} // Pass the data array for holdings
+                portfolio={portfolio?.data || []}
                 onSell={handleSellStock}
                 isSelling={isSelling}
             />

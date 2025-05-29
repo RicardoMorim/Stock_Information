@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// Define a schema for the data
+
 const stockSchema = new mongoose.Schema({
     symbol: { 
         type: String, 
@@ -22,31 +22,31 @@ const stockSchema = new mongoose.Schema({
         type: String, 
         required: false 
     },
-    tradingCurrency: {  // Add trading currency
+    tradingCurrency: {  
         type: String,
         required: true,
         default: 'USD',
-        enum: ['USD', 'EUR', 'PLN', 'GBP'] // Add more currencies as needed
+        enum: ['USD', 'EUR', 'PLN', 'GBP'] 
     },
-    country: {  // Add country information
+    country: {  
         type: String,
         required: false
     },
-    marketIdentifier: {  // Add market identifier (e.g., .WA for Warsaw)
+    marketIdentifier: { 
         type: String,
         required: false
     }
 });
 
-stockSchema.index({ name: 1, symbol: 1 }, { unique: true }); // Compound unique index
+stockSchema.index({ name: 1, symbol: 1 }, { unique: true }); 
 
-// Add helper method to get stock's trading currency
+
 stockSchema.statics.getTradingCurrency = async function(symbol) {
     const stock = await this.findOne({ symbol });
-    return stock ? stock.tradingCurrency : 'USD'; // Default to USD if not found
+    return stock ? stock.tradingCurrency : 'USD';
 };
 
-// Add helper method to get clean symbol (without market identifier)
+
 stockSchema.statics.getCleanSymbol = function(symbol) {
     return symbol.split('.')[0];
 };

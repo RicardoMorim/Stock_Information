@@ -27,8 +27,8 @@ const calculateFinancialRatios = (incomeStatement, balanceSheet, currentPrice) =
         priceToEarnings: dilutedEPS !== undefined && dilutedEPS !== 0 && currentPrice ? currentPrice / dilutedEPS : null,
         priceToBook: sharesOutstanding !== 0 && equity !== 0 && currentPrice ? currentPrice / (equity / sharesOutstanding) : null,
         priceToSales: sharesOutstanding !== 0 && revenue !== 0 && currentPrice ? currentPrice / (revenue / sharesOutstanding) : null,
-        marketCap: incomeStatement.market_capitalization?.value || null, // Direct from Polygon if available
-        enterpriseValue: incomeStatement.enterprise_value?.value || null, // Direct from Polygon if available
+        marketCap: incomeStatement.market_capitalization?.value || null,
+        enterpriseValue: incomeStatement.enterprise_value?.value || null, 
     };
     return ratios;
 };

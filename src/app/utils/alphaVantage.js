@@ -13,8 +13,6 @@ export async function fetchAlphaVantageStockData(symbol) {
     return null;
   }
   try {
-    // Example: Fetching Global Quote (for price) and Overview (for company details)
-    // Adjust function and parameters as needed based on specific data requirements.
     const quoteUrl = `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
     const overviewUrl = `${ALPHA_VANTAGE_BASE_URL}?function=OVERVIEW&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
 
@@ -101,8 +99,6 @@ export async function fetchAlphaVantageNews(symbol) {
     return null;
   }
   try {
-    // Alpha Vantage provides news through the "NEWS_SENTIMENT" function.
-    // It can be filtered by tickers.
     const url = `${ALPHA_VANTAGE_BASE_URL}?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
     const response = await fetch(url);
 
@@ -115,15 +111,15 @@ export async function fetchAlphaVantageNews(symbol) {
 
     if (data.Note) {
       console.warn(`Alpha Vantage API limit reached or other note for news: ${data.Note}`);
-      return []; // Return empty array if limit reached, to not break flow
+      return []; 
     }
     
     if (data.feed && Array.isArray(data.feed)) {
       return data.feed.map(article => ({
-        id: article.url, // Assuming URL is unique enough for an ID
+        id: article.url, 
         headline: article.title,
         summary: article.summary,
-        source_name: article.source, // 'source' is the key in AV feed
+        source_name: article.source, 
         url: article.url,
         image_url: article.banner_image,
         published_at: new Date(article.time_published.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6Z')).toISOString(), // Format: YYYYMMDDTHHMMSS to ISO
@@ -133,7 +129,7 @@ export async function fetchAlphaVantageNews(symbol) {
       }));
     }
     console.warn(`No news feed found in Alpha Vantage response for ${symbol} or data is not in expected format.`);
-    return []; // Return empty if no news or unexpected format
+    return []; 
   } catch (error) {
     console.error(`Error fetching news from Alpha Vantage for ${symbol}:`, error);
     return null;
@@ -152,10 +148,11 @@ export async function getAlphaVantageHistoricalDaily(symbol, days = 7) {
     return null;
   }
   try {
+    // For future reference:
     // TIME_SERIES_DAILY returns up to 100 latest data points.
     // 'outputsize=compact' returns the latest 100 data points.
     // 'outputsize=full' returns the full-length time series.
-    // We'll use compact and then slice to get approximately `days`.
+    // we are use compact and then slice to get approximately `days`.
     const url = `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${ALPHA_VANTAGE_KEY}`;
     const response = await fetch(url);
 
@@ -168,7 +165,7 @@ export async function getAlphaVantageHistoricalDaily(symbol, days = 7) {
 
     if (data.Note) {
       console.warn(`Alpha Vantage API limit reached or other note for TIME_SERIES_DAILY on ${symbol}: ${data.Note}`);
-      return null; // Return null if limit reached or other API note
+      return null; 
     }
 
     const timeSeries = data["Time Series (Daily)"];
@@ -190,7 +187,7 @@ export async function getAlphaVantageHistoricalDaily(symbol, days = 7) {
         return null;
     }
 
-    // console.log(`Successfully fetched ${formattedData.length} historical daily bars from Alpha Vantage for ${symbol}`);
+
     return formattedData;
 
   } catch (error) {

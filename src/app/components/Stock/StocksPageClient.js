@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-// Import new components
+
 import StocksPageSkeleton from '@/app/components/Stock/StocksPageSkeleton';
 import StockSearchBar from '@/app/components/Stock/StockSearchBar';
 import StockCard from '@/app/components/Stock/StockCard';
@@ -14,9 +14,9 @@ export default function StocksPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [mainStocksData, setMainStocksData] = useState([]); // For initially displayed cards with full data
-  const [searchableList, setSearchableList] = useState([]); // For search functionality (symbol, name)
-  const [filteredSearchableList, setFilteredSearchableList] = useState([]); // For paginated display of search results
+  const [mainStocksData, setMainStocksData] = useState([]);
+  const [searchableList, setSearchableList] = useState([]); 
+  const [filteredSearchableList, setFilteredSearchableList] = useState([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,13 +27,13 @@ export default function StocksPageClient() {
   const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [currentPage, setCurrentPage] = useState(initialPage);
 
-  // Fetch initial data (main stocks with details + full searchable list)
+
   useEffect(() => {
     const fetchInitialData = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        // This single endpoint will provide both main stocks data and the full searchable list
+      
         const response = await fetch('/api/stocks'); 
         if (!response.ok) {
           const errorData = await response.json();
@@ -44,7 +44,7 @@ export default function StocksPageClient() {
           setMainStocksData(data.data.mainStocksData || []);
           const sl = data.data.searchableList || [];
           setSearchableList(sl);
-          // Log a sample of the searchable list to help debug missing symbols
+
           if (sl.length > 0) {
             console.log("Sample of searchableList symbols:", sl.slice(0, 10).map(s => s.symbol));
           }
@@ -63,24 +63,24 @@ export default function StocksPageClient() {
     fetchInitialData();
   }, []);
 
-  // Update URL when searchTerm or currentPage changes
+
   useEffect(() => {
     const params = new URLSearchParams();
     if (searchTerm) {
       params.set('query', searchTerm);
     }
-    // Only add page to URL if searching (not for initial main stocks display)
+
     if (searchTerm && currentPage > 1) {
       params.set('page', currentPage.toString());
     }
-    // Use router.push to ensure re-render if only query params change, replace might not always trigger it.
+ 
     router.push(`/stocks?${params.toString()}`, { scroll: false });
   }, [searchTerm, currentPage, router]);
 
-  // Memoized filtering for search results
+
   const searchResultsPaginated = useMemo(() => {
     if (!searchTerm) {
-      setFilteredSearchableList([]); // Clear if no search term
+      setFilteredSearchableList([]); 
       return [];
     }
     const lowercasedFilter = searchTerm.toLowerCase();
@@ -89,7 +89,7 @@ export default function StocksPageClient() {
       (stock.name?.toLowerCase().includes(lowercasedFilter))
     );
 
-    // Sort the filtered results for relevance
+
     const sortedFiltered = filtered.sort((a, b) => {
       const aSymbol = a.symbol?.toLowerCase() || '';
       const bSymbol = b.symbol?.toLowerCase() || '';
@@ -99,7 +99,7 @@ export default function StocksPageClient() {
       // Priority 1: Exact symbol match
       if (aSymbol === lowercasedFilter && bSymbol !== lowercasedFilter) return -1;
       if (bSymbol === lowercasedFilter && aSymbol !== lowercasedFilter) return 1;
-      if (aSymbol === lowercasedFilter && bSymbol === lowercasedFilter) { // Both exact symbol match, sort by symbol
+      if (aSymbol === lowercasedFilter && bSymbol === lowercasedFilter) { 
         return aSymbol.localeCompare(bSymbol);
       }
 
@@ -108,7 +108,7 @@ export default function StocksPageClient() {
       const bSymbolStartsWith = bSymbol.startsWith(lowercasedFilter);
       if (aSymbolStartsWith && !bSymbolStartsWith) return -1;
       if (bSymbolStartsWith && !aSymbolStartsWith) return 1;
-      if (aSymbolStartsWith && bSymbolStartsWith) { // Both symbols start with, sort by symbol
+      if (aSymbolStartsWith && bSymbolStartsWith) { 
         return aSymbol.localeCompare(bSymbol);
       }
 
@@ -117,7 +117,7 @@ export default function StocksPageClient() {
       const bNameStartsWith = bName.startsWith(lowercasedFilter);
       if (aNameStartsWith && !bNameStartsWith) return -1;
       if (bNameStartsWith && !aNameStartsWith) return 1;
-      if (aNameStartsWith && bNameStartsWith) { // Both names start with, sort by name then symbol
+      if (aNameStartsWith && bNameStartsWith) { 
         const nameComparison = aName.localeCompare(bName);
         if (nameComparison !== 0) return nameComparison;
         return aSymbol.localeCompare(bSymbol);
@@ -129,15 +129,13 @@ export default function StocksPageClient() {
       if (aSymbolIncludes && !bSymbolIncludes) return -1;
       if (bSymbolIncludes && !aSymbolIncludes) return 1;
 
-      // Priority 5: Name includes search term (but doesn't start with)
-      // This is the fallback if none of the above apply, already covered by initial filter.
-      // Final fallback: alphabetical by symbol, then by name for stability
+      // Final priority: alphabetical by symbol, then by name for stability
       const symbolComparison = aSymbol.localeCompare(bSymbol);
       if (symbolComparison !== 0) return symbolComparison;
       return aName.localeCompare(bName);
     });
     
-    setFilteredSearchableList(sortedFiltered); // Update for totalPages calculation using the sorted list
+    setFilteredSearchableList(sortedFiltered); 
 
     const firstPageIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const lastPageIndex = firstPageIndex + ITEMS_PER_PAGE;
@@ -146,7 +144,7 @@ export default function StocksPageClient() {
 
   const handleSearch = useCallback((query) => {
     setSearchTerm(query);
-    setCurrentPage(1); // Reset to first page on new search
+    setCurrentPage(1); 
   }, []);
 
   const handlePageChange = useCallback((pageNumber) => {
@@ -175,7 +173,7 @@ export default function StocksPageClient() {
 
   // Determine what to display: initial main stocks or search results
   const displayData = searchTerm ? searchResultsPaginated : mainStocksData;
-  const totalPages = searchTerm ? Math.ceil(filteredSearchableList.length / ITEMS_PER_PAGE) : 0; // Pagination only for search
+  const totalPages = searchTerm ? Math.ceil(filteredSearchableList.length / ITEMS_PER_PAGE) : 0; 
 
   return (
     <div className="container mx-auto p-4 md:p-6 bg-gray-900 text-white min-h-screen">

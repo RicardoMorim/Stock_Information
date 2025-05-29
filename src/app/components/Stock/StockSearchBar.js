@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { useState, useCallback } from "react";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
-export default function StockSearchBar({ onSearch, initialQuery = '' }) {
+export default function StockSearchBar({ onSearch, initialQuery = "" }) {
   const [searchTerm, setSearchTerm] = useState(initialQuery);
 
   const handleInputChange = (event) => {
@@ -14,7 +14,10 @@ export default function StockSearchBar({ onSearch, initialQuery = '' }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mb-6 md:mb-8 w-full max-w-xl mx-auto">
+    <form
+      onSubmit={handleSubmit}
+      className="mb-6 md:mb-8 w-full max-w-xl mx-auto"
+    >
       <div className="relative">
         <input
           type="text"

@@ -13,7 +13,7 @@ export default function Register() {
 	const [message, setMessage] = useState("");
 
 	useEffect(() => {
-		// Redirect to /stocks if user is already logged in
+
 		const token = localStorage.getItem("token");
 		if (token) {
 			router.push("/stocks");
@@ -39,8 +39,8 @@ export default function Register() {
 
 			if (res.ok) {
 				setMessage("Registration successful!");
-				localStorage.setItem("token", data.token); // Store the token
-				router.push("/stocks"); // Redirect after successful registration
+				localStorage.setItem("token", data.token); 
+				router.push("/stocks");
 			} else {
 				setMessage(data.error);
 			}

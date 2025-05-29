@@ -13,7 +13,7 @@ const PriceChart = ({ historicalData, symbol }) => {
             toolbar: {
                 show: true
             },
-            foreColor: '#ccc' // Light text color for dark theme
+            foreColor: '#ccc' 
         },
         stroke: {
             curve: 'smooth',
@@ -57,9 +57,9 @@ const PriceChart = ({ historicalData, symbol }) => {
             },
             theme: 'dark'
         },
-        colors: ['#4ade80'], // Green color for price
+        colors: ['#4ade80'], 
         grid: {
-            borderColor: '#555' // Darker grid lines
+            borderColor: '#555' 
         }
     };
 

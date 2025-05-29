@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 
 const SECFilingsSection = ({ filings, onFilingClick }) => {
     if (!filings || filings.length === 0) {
-        return null; // Or a message indicating no filings
+        return null; 
     }
 
     return (

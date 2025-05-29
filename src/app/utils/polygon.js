@@ -29,7 +29,7 @@ export async function fetchPolygonTickerDetails(symbol) {
         currency_name: data.results.currency_name,
         cik: data.results.cik,
         source: 'Polygon.io',
-        isDelayed: false, // Polygon data is generally real-time
+        isDelayed: false, 
       };
     }
     return null;
@@ -66,7 +66,7 @@ export async function fetchPolygonPreviousClose(symbol) {
         low: prevBar.l,
         volume: prevBar.v,
         source: 'Polygon.io',
-        isDelayed: false, // Data is for previous day, but accurately sourced
+        isDelayed: false, 
       };
     }
     return null;
@@ -87,20 +87,10 @@ export async function fetchPolygonLatestQuote(symbol) {
         console.error('Polygon API key is missing.');
         return null;
     }
-    // Determine if it's crypto or stock based on common patterns or a helper
-    const isCrypto = symbol.includes('X:') || symbol.includes('-'); // Basic check, might need refinement
+    const isCrypto = symbol.includes('X:') || symbol.includes('-');
     let url;
 
     if (isCrypto) {
-        // Polygon uses specific format for crypto pairs, e.g., X:BTCUSD
-        // Assuming symbol is already in the correct format or needs to be adapted.
-        // For simplicity, let's assume the symbol is passed correctly for crypto.
-        // The v2/last/trade for crypto might be simpler if NBBO isn't needed.
-        // For now, let's use daily aggregate as a stand-in for "latest" price for crypto if real-time quotes are complex.
-        // This is a simplification. A proper implementation would use real-time crypto quotes if available.
-        // url = `${POLYGON_BASE_URL}/v1/last/crypto/${symbol.replace('X:', '').split('-')[0]}/${symbol.replace('X:', '').split('-')[1]}?apiKey=${POLYGON_API_KEY}`;
-        // The above is for last trade. For a "quote like" structure, daily bars might be better.
-        // Let's try to get the most recent daily bar for crypto as a proxy for "latest quote"
         const today = new Date().toISOString().split('T')[0];
         url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${today}/${today}?adjusted=true&sort=desc&limit=1&apiKey=${POLYGON_API_KEY}`;
     } else {
@@ -119,28 +109,21 @@ export async function fetchPolygonLatestQuote(symbol) {
             if (data.resultsCount > 0 && data.results && data.results[0]) {
                 const latestBar = data.results[0];
                 return {
-                    price: latestBar.c, // Closing price of the most recent bar
-                    bid_price: latestBar.c, // Approximation
-                    ask_price: latestBar.c, // Approximation
-                    volume: latestBar.v, // Todays volume so far
+                    price: latestBar.c,
+                    bid_price: latestBar.c,
+                    ask_price: latestBar.c, 
+                    volume: latestBar.v,
                     source: 'Polygon.io (Daily Agg for Crypto)',
-                    isDelayed: false, // Real-time aggregate
+                    isDelayed: false, 
                 };
             }
         } else { // Stocks
             if (data.results) {
                 const quote = data.results;
                 return {
-                    price: quote.P, // Last trade price (P for NBBO, p for regular quotes)
-                    bid_price: quote.p, // Bid price
-                    ask_price: quote.P, // Ask price (Using P as a placeholder, check Polygon docs for correct ask field for NBBO)
-                                       // The /v2/quotes/{stockTicker} endpoint has 'ask_price' and 'bid_price'
-                                       // For NBBO /v2/last/nbbo/{stockTicker} results:
-                                       // P = Last trade price, S = Last trade size, T = SIP timestamp
-                                       // p = Bid price, s = Bid size, x = Bid exchange
-                                       // P = Ask price (this is likely incorrect, Polygon uses different fields for ask in NBBO)
-                                       // Let's use /v2/quotes/{stockTicker} for a more complete quote for stocks
-                                       // Switching to /v3/quotes for stocks for more fields
+                    price: quote.P, 
+                    bid_price: quote.p,
+                    ask_price: quote.P, 
                     source: 'Polygon.io',
                     isDelayed: false, 
                 };
@@ -164,11 +147,8 @@ export async function fetchPolygonStockLatestQuote(symbol) {
         console.error('Polygon API key is missing.');
         return null;
     }
-    // This endpoint is generally for stocks.
     if (symbol.toUpperCase().startsWith('X:')) {
         console.warn(`fetchPolygonStockLatestQuote is intended for stocks. Symbol ${symbol} looks like crypto.`);
-        // Fallback or specific crypto handling can be added here if needed.
-        // For now, let's try to fetch it as if it's a stock, Polygon might handle some crypto tickers.
     }
 
     const url = `${POLYGON_BASE_URL}/v3/quotes/${symbol.toUpperCase()}?limit=1&apiKey=${POLYGON_API_KEY}`;
@@ -184,15 +164,15 @@ export async function fetchPolygonStockLatestQuote(symbol) {
         if (data.results && data.results.length > 0) {
             const quote = data.results[0];
             return {
-                price: quote.ask_price, // Or bid_price, or a mid-point. Ask price is often used as current price.
+                price: quote.ask_price,
                 bid_price: quote.bid_price,
                 ask_price: quote.ask_price,
                 bid_size: quote.bid_size,
                 ask_size: quote.ask_size,
-                last_trade_price: quote.last_trade?.p, // If available from this endpoint
-                last_trade_timestamp: quote.last_trade?.t, // If available
+                last_trade_price: quote.last_trade?.p, 
+                last_trade_timestamp: quote.last_trade?.t, 
                 source: 'Polygon.io',
-                isDelayed: false, // Polygon data is generally real-time
+                isDelayed: false,
             };
         }
         console.warn(`No quote data found in Polygon (v3/quotes) response for ${symbol}`);
@@ -237,7 +217,7 @@ export async function fetchPolygonHistoricalData(symbol, from, to, timespan = 'd
         vw: bar.vw, // Volume Weighted Average Price
         n: bar.n, // Number of transactions
         source: 'Polygon.io',
-        isDelayed: false, // Historical data is factual
+        isDelayed: false, 
       }));
     }
     return [];
@@ -259,8 +239,7 @@ export async function fetchPolygonNews(symbol, limit = 10) {
     return null;
   }
   try {
-    // Polygon might require "tickers" query param for multiple, or just one for single.
-    // The documentation suggests `GET /v2/reference/news?ticker=AAPL`
+
     const url = `${POLYGON_BASE_URL}/v2/reference/news?ticker=${symbol.toUpperCase()}&limit=${limit}&apiKey=${POLYGON_API_KEY}`;
     const response = await fetch(url);
     if (!response.ok) {
@@ -280,7 +259,7 @@ export async function fetchPolygonNews(symbol, limit = 10) {
         symbols: article.tickers,
         keywords: article.keywords,
         source_api: 'Polygon.io',
-        isDelayed: false, // News can have a publication delay, but the API itself is real-time
+        isDelayed: false, 
       }));
     }
     return [];
@@ -299,45 +278,38 @@ export async function getPolygonSnapshot(originalSymbol) {
     let symbolForPolygon = originalSymbol;
     const isLikelyCryptoByFormat = originalSymbol.toUpperCase().startsWith('X:') || originalSymbol.includes('/') || originalSymbol.includes('-');
 
-    // Standardize to Polygon's X:BASEQUOTE format for cryptos if it seems like a crypto pair that needs it
     if (isLikelyCryptoByFormat && originalSymbol.includes('/')) {
         symbolForPolygon = `X:${originalSymbol.replace('/', '').toUpperCase()}`;
     } else if (isLikelyCryptoByFormat && originalSymbol.includes('-') && !originalSymbol.toUpperCase().startsWith('X:')) {
-        // e.g. BTC-USD to X:BTCUSD
+        // BTC-USD to X:BTCUSD
         symbolForPolygon = `X:${originalSymbol.replace('-', '').toUpperCase()}`;
     }
-    // If it's already X:SOMETHING, it's good.
-    // If it's just "BTCUSD" and identified as crypto by other means, fetchPolygonLatestQuote might handle it or it might need X: prefix.
-    // For now, this covers the main / and - cases for transformation to X: format.
 
     const details = await fetchPolygonTickerDetails(symbolForPolygon);
     const prevCloseData = await fetchPolygonPreviousClose(symbolForPolygon);
     
     let latestQuoteData;
-    // Use details.type if available, otherwise rely on format check
+
     const isConfirmedCrypto = details?.type === 'CRYPTO' || symbolForPolygon.toUpperCase().startsWith('X:');
 
     if (isConfirmedCrypto) {
-        // Ensure the symbol passed to fetchPolygonLatestQuote is definitely in X:Format if it's crypto
         const cryptoSymbolForQuote = symbolForPolygon.toUpperCase().startsWith('X:') 
             ? symbolForPolygon 
-            : `X:${symbolForPolygon}`; // Add X: if somehow missed (e.g. details.type said CRYPTO but format was just BTCUSD)
+            : `X:${symbolForPolygon}`;
         latestQuoteData = await fetchPolygonLatestQuote(cryptoSymbolForQuote);
     } else {
-        latestQuoteData = await fetchPolygonStockLatestQuote(symbolForPolygon); // For stocks
+        latestQuoteData = await fetchPolygonStockLatestQuote(symbolForPolygon); 
     }
 
     if (!prevCloseData && !latestQuoteData) {
         console.warn(`Could not retrieve significant pricing data from Polygon for ${symbol}`);
-        // If we have details, we can still return them with a note about missing price.
-        // For now, if price is missing, consider it a partial failure for snapshot.
+
         return null;
     }
     
-    // Prioritize latest quote for current price, fall back to prev close if needed (though unlikely for snapshot)
     const currentPrice = latestQuoteData?.price || prevCloseData?.c;
-    const openPrice = latestQuoteData?.open || prevCloseData?.o; // Polygon quote might not have open, prevClose does
-    const highPrice = latestQuoteData?.high || prevCloseData?.h; // Similar for high/low
+    const openPrice = latestQuoteData?.open || prevCloseData?.o; 
+    const highPrice = latestQuoteData?.high || prevCloseData?.h; 
     const lowPrice = latestQuoteData?.low || prevCloseData?.l;
     const volume = latestQuoteData?.volume || prevCloseData?.v;
 
@@ -345,7 +317,7 @@ export async function getPolygonSnapshot(originalSymbol) {
     return {
         symbol: symbol.toUpperCase(),
         name: details?.name || symbol.toUpperCase(),
-        type: details?.type || (isCrypto ? 'CRYPTO' : 'CS'), // CS for Common Stock
+        type: details?.type || (isCrypto ? 'CRYPTO' : 'CS'), 
         price: currentPrice,
         change: prevCloseData?.previousClose ? (currentPrice - prevCloseData.previousClose) : null,
         changePercent: prevCloseData?.previousClose && currentPrice ? ((currentPrice - prevCloseData.previousClose) / prevCloseData.previousClose) * 100 : null,
@@ -358,7 +330,7 @@ export async function getPolygonSnapshot(originalSymbol) {
         locale: details?.locale,
         primary_exchange: details?.primary_exchange,
         currency: details?.currency_name,
-        last_trade_price: latestQuoteData?.last_trade_price, // from v3 quotes
+        last_trade_price: latestQuoteData?.last_trade_price, 
         bid_price: latestQuoteData?.bid_price,
         ask_price: latestQuoteData?.ask_price,
         source: 'Polygon.io',
