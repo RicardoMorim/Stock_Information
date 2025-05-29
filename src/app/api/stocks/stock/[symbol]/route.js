@@ -27,7 +27,9 @@ export async function GET(req, { params }) {
         { success: false, message: "Symbol is required." },
         { status: 400 }
       );
-    }    console.log(`[StockAPI] Processing symbol: ${symbol}`);
+    }
+
+    console.log(`[StockAPI] Processing symbol: ${symbol}`);
 
     // Check Redis cache first
     const cacheKey = `stock_${symbol}`;
@@ -35,7 +37,7 @@ export async function GET(req, { params }) {
       const cachedData = await redis.get(cacheKey);
       if (cachedData) {
         console.log(`[StockAPI] Returning cached data from Redis for ${symbol}`);
-        return NextResponse.json(cachedData);
+        return NextResponse.json({data: cachedData});
       }
     } catch (error) {
       console.error(`[StockAPI] Error reading from Redis cache for ${symbol}:`, error);
@@ -91,57 +93,61 @@ export async function GET(req, { params }) {
     const responseData = {
       success: true,
       data: {
-        symbol: symbol,
-        name: finalName,
-        exchangeShortName: finalExchange,
-        type: finalType,
-        price: currentPrice,
-        change: change,
-        changePercent: changePercent,
-        high: snapshot.dailyBar?.h || null,
-        low: snapshot.dailyBar?.l || null,
-        open: snapshot.dailyBar?.o || null,
-        previousClose: previousClose,
-        volume: snapshot.dailyBar?.v || null,
-        vwap: snapshot.dailyBar?.vw || null,
-        
-        // Historical chart data
-        historicalData: historicalDataResult.data,
-        historicalDataSource: historicalDataResult.source,
-        historicalDataError: historicalDataResult.error,
-        
-        // News data
-        news: Array.isArray(newsData) ? newsData : [],
-        
-        // Financial metrics
-        fundamentals: {
-          latestFinancials: financialMetrics.fundamentals && financialMetrics.fundamentals.length > 0 
-                           ? financialMetrics.fundamentals[0] 
-                           : {},
-          rawFinancials: financialMetrics.fundamentals || [],
+        data: {
+          symbol: symbol,
+          name: finalName,
+          exchangeShortName: finalExchange,
+          type: finalType,
+          price: currentPrice,
+          change: change,
+          changePercent: changePercent,
+          high: snapshot.dailyBar?.h || null,
+          low: snapshot.dailyBar?.l || null,
+          open: snapshot.dailyBar?.o || null,
+          previousClose: previousClose,
+          volume: snapshot.dailyBar?.v || null,
+          vwap: snapshot.dailyBar?.vw || null,
+          
+          // Historical chart data
+          historicalData: historicalDataResult.data,
+          historicalDataSource: historicalDataResult.source,
+          historicalDataError: historicalDataResult.error,
+          
+          // News data
+          news: Array.isArray(newsData) ? newsData : [],
+          
+          // Financial metrics
+          fundamentals: {
+            latestFinancials: financialMetrics.fundamentals && financialMetrics.fundamentals.length > 0 
+                             ? financialMetrics.fundamentals[0] 
+                             : {},
+            rawFinancials: financialMetrics.fundamentals || [],
+          },
+          
+          // Dividend information
+          dividendInfo: {
+            yield: financialMetrics.dividends?.dividendYield || null,
+            annualAmount: financialMetrics.dividends?.annualDividendAmount || null,
+          },
+          
+          // Data source information
+          source: snapshot.source || 'N/A',
+          isDelayed: snapshot.isDelayed || false,
+          
+          // Additional metadata
+          assetSource: assetDetails.source,
+          financialSource: financialMetrics.source,
         },
-        
-        // Dividend information
-        dividendInfo: {
-          yield: financialMetrics.dividends?.dividendYield || null,
-          annualAmount: financialMetrics.dividends?.annualDividendAmount || null,
-        },
-        
-        // Data source information
-        source: snapshot.source || 'N/A',
-        isDelayed: snapshot.isDelayed || false,
-        
-        // Additional metadata
-        assetSource: assetDetails.source,
-        financialSource: financialMetrics.source,
       },
-    };    console.log(`[StockAPI] Successfully compiled data for ${symbol}:`, {
-      price: responseData.data.price,
-      source: responseData.data.source,
-      historicalPoints: responseData.data.historicalData.length,
-      newsCount: responseData.data.news.length,
-      hasFundamentals: responseData.data.fundamentals.rawFinancials.length > 0,
-      hasDividends: !!responseData.data.dividendInfo.yield
+    };
+
+    console.log(`[StockAPI] Successfully compiled data for ${symbol}:`, {
+      price: responseData.data.data.price,
+      source: responseData.data.data.source,
+      historicalPoints: responseData.data.data.historicalData.length,
+      newsCount: responseData.data.data.news.length,
+      hasFundamentals: responseData.data.data.fundamentals.rawFinancials.length > 0,
+      hasDividends: !!responseData.data.data.dividendInfo.yield
     });
 
     // Cache the response in Redis for 15 minutes
