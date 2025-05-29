@@ -2,10 +2,10 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../contexts/AuthContext"; 
-
 export default function Navbar() {
   const router = useRouter();
   const { user, logout, loading } = useAuth(); 
+
 
   const handleLogout = () => {
     logout(); 

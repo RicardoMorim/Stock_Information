@@ -53,10 +53,10 @@ export default function StockDetails() {
   const [filingDetails, setFilingDetails] = useState(null);
   const [filingIsLoading, setFilingIsLoading] = useState(false);
 
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !loading) {
       console.error("User not authenticated, redirecting to login.");
       router.push("/login");
       return;

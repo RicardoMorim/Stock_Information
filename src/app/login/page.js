@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
+import { useAuth } from "@/app/contexts/AuthContext";
 
 export default function Login() {
   const router = useRouter();
@@ -10,12 +10,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
 
+  const { user, loading, login } = useAuth(); 
+
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
+    if (user && !loading) {
+      console.log("User is already logged in, redirecting to stocks page.");
       router.push("/stocks");
     }
-  }, [router]);
+  }, [user, loading, router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -28,13 +30,14 @@ export default function Login() {
       const data = await res.json();
       if (res.ok) {
         setMessage("Login successful!");
-        localStorage.setItem("token", data.token);
+        login(data, data.token);
         router.push("/stocks"); 
       } else {
-        setMessage(data.error);
+        setMessage(data.error || "Login failed. Please check your credentials.");
       }
     } catch (error) {
-      setMessage("Something went wrong");
+      console.error("Login error:", error);
+      setMessage("Something went wrong during login.");
     }
   };
 

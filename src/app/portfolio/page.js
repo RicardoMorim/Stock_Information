@@ -17,7 +17,7 @@ export default function PortfolioPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSelling, setIsSelling] = useState(null);
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   const fetchPortfolio = useCallback(async () => {
     console.log("[PortfolioPage] fetchPortfolio called.");
@@ -59,7 +59,7 @@ export default function PortfolioPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !loading) {
       console.error(
         "[PortfolioPage] User not authenticated, redirecting to login."
       );
@@ -71,7 +71,7 @@ export default function PortfolioPage() {
     );
     setIsLoading(true);
     fetchPortfolio();
-  }, [fetchPortfolio, router, user]);
+  }, [fetchPortfolio, router, user, loading]);
 
   const handleAddStock = async (stockData) => {
     setIsAdding(true);

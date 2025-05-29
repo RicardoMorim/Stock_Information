@@ -25,15 +25,16 @@ export default function StocksPageClient() {
 
   const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [currentPage, setCurrentPage] = useState(initialPage);
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!user) {
+      if (!user && !loading) {
         console.error("User not authenticated, redirecting to login.");
         router.push("/login");
         return;
       }
+
       setIsLoading(true);
       setError(null);
       try {
@@ -71,7 +72,7 @@ export default function StocksPageClient() {
       }
     };
     fetchInitialData();
-  }, [router, user]);
+  }, [router, user, loading]);
 
   useEffect(() => {
     const params = new URLSearchParams();
