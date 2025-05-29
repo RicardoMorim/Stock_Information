@@ -3,9 +3,6 @@ import connectToDatabase from '@/app/utils/db';
 import Portfolio from '@/app/models/Portfolio';
 import jwt from 'jsonwebtoken';
 
-const ALPACA_API_KEY = process.env.ALPACA_KEY;
-const ALPACA_SECRET_KEY = process.env.ALPACA_SECRET_KEY;
-const YH_FINANCE_KEY = process.env.YH_FINANCE_KEY;
 
 function getUserIdFromToken(req) {
 	try {

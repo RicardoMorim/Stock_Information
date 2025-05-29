@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  polygonClient,
   fetchPolygonRecentHistoricalData,
 } from "@/app/utils/polygon";
-import alpaca, {
+import  {
   getAlpacaHistoricalBars,
   getAlpacaSnapshots,
 } from "@/app/utils/alpaca";

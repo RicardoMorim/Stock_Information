@@ -1,8 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import Image from 'next/image'; 
 
 import StockDetailsSkeleton from '@/app/components/Stock/StockDetailsSkeleton';
 import StockHeader from '@/app/components/Stock/StockHeader';

@@ -2,22 +2,21 @@
 import Image from "next/image";
 
 const NewsArticleCard = ({ article, index }) => {
-    // Destructure with defaults and new fields from Alpha Vantage
     const {
-        headline, // Use headline (Alpaca) or title (Alpha Vantage)
-        title, // Fallback if headline is not present
-        summary, // Use summary (Alpaca) or description (Alpha Vantage)
-        description, // Fallback if summary is not present
-        image_url, // Use image_url (Alpaca) or banner_image (Alpha Vantage)
-        banner_image, // Fallback if image_url is not present
-        source_name, // Use source_name (Alpaca) or source (Alpha Vantage)
-        source, // Fallback if source_name is not present (this is an object in Alpaca, string in AV)
-        published_at, // Use published_at (Alpaca & AV normalized)
-        published_utc, // Fallback for older Alpaca structure if needed
-        url, // Use url (Alpaca & AV normalized)
-        article_url, // Fallback for older Alpaca structure
-        source_api, // Added to distinguish API source
-        isDelayed // Added to indicate if data might be stale
+        headline, 
+        title, 
+        summary,
+        description, 
+        image_url,
+        banner_image,
+        source_name,
+        source, 
+        published_at,
+        published_utc, 
+        url, 
+        article_url,
+        source_api, 
+        isDelayed 
     } = article;
 
     const displayTitle = headline || title || 'No title available';

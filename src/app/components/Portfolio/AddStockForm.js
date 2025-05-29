@@ -6,7 +6,7 @@ export default function AddStockForm({ onAddStock, isAdding }) {
   const [quantity, setQuantity] = useState('');
   const [costPerShare, setCostPerShare] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
-  const [currency, setCurrency] = useState('USD'); // Default currency
+  const [currency, setCurrency] = useState('USD'); 
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 

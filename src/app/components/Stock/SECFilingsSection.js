@@ -1,6 +1,5 @@
 
 "use client";
-import { useState, useEffect } from 'react';
 
 const SECFilingsSection = ({ filings, onFilingClick }) => {
     if (!filings || filings.length === 0) {

@@ -8,7 +8,7 @@ import StockSearchBar from '@/app/components/Stock/StockSearchBar';
 import StockCard from '@/app/components/Stock/StockCard';
 import Pagination from '@/app/components/Stock/Pagination';
 
-const ITEMS_PER_PAGE = 12; // Number of stocks to display per page
+const ITEMS_PER_PAGE = 12; 
 
 export default function StocksPageClient() {
   const router = useRouter();
@@ -193,7 +193,7 @@ export default function StocksPageClient() {
       ) : (
         <div className="text-center py-10">
           {searchTerm ? (
-            <p className="text-xl text-gray-500">No stocks found matching your criteria: "{searchTerm}".</p>
+            <p className="text-xl text-gray-500">No stocks found matching your criteria: &quot;{searchTerm}&quot;.</p>
           ) : (
             <p className="text-xl text-gray-500">No featured stocks available at the moment.</p> // Message if mainStocksData is empty and no search
           )}
