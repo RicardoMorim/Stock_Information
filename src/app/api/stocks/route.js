@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Redis } from '@upstash/redis'; 
 import {
   fetchPolygonRecentHistoricalData,
 } from "@/app/utils/polygon";
@@ -12,18 +13,14 @@ import {
 } from "@/app/utils/alphaVantage";
 import { getYahooFinanceHistoricalData } from "@/app/utils/yahooFinance";
 
-// In-memory cache
-let mainStocksCache = {
-  data: null,
-  lastFetched: 0,
-};
+// Initialize Upstash Redis client
+const redis = Redis.fromEnv(); 
 
-let searchableListCache = {
-  data: null,
-  lastFetched: 0,
-};
+const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+const CACHE_DURATION_SECONDS = 30 * 60;  
 
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+const MAIN_STOCKS_CACHE_KEY = "mainStocksData"; 
+const SEARCHABLE_LIST_CACHE_KEY = "searchableListData"; 
 
 // Define main tickers: stocks/ETFs and crypto
 const MAIN_STOCK_ETF_TICKERS = [
@@ -49,16 +46,17 @@ const MAIN_CRYPTO_TICKERS = [
 let cryptoDetails = {};
 
 async function fetchMainStocksData() {
-
-
-  const now = Date.now();
-  if (
-    mainStocksCache.data &&
-    now - mainStocksCache.lastFetched < CACHE_DURATION
-  ) {
-    console.log("Serving main stocks data from cache.");
-    return mainStocksCache.data;
+  // Try to fetch from Redis cache first
+  try {
+    const cachedData = await redis.get(MAIN_STOCKS_CACHE_KEY);
+    if (cachedData) {
+      console.log("Serving main stocks data from Redis cache.");
+      return cachedData; 
+    }
+  } catch (error) {
+    console.error("[Redis Cache] Error reading mainStocksData from Redis:", error);
   }
+
   console.log(
     "Fetching main stocks data. Checking MAIN_STOCK_ETF_TICKERS and MAIN_CRYPTO_TICKERS..."
   );
@@ -509,8 +507,14 @@ async function fetchMainStocksData() {
       console.log("No MAIN_CRYPTO_TICKERS to fetch.");
     }
 
-    mainStocksCache.data = fetchedMainStocks;
-    mainStocksCache.lastFetched = now;
+    // Store in Redis cache
+    try {
+      await redis.set(MAIN_STOCKS_CACHE_KEY, fetchedMainStocks, { ex: CACHE_DURATION_SECONDS });
+      console.log("Stored main stocks data in Redis cache.");
+    } catch (error) {
+      console.error("[Redis Cache] Error writing mainStocksData to Redis:", error);
+    }
+
     console.log("Total fetchedMainStocks count:", fetchedMainStocks.length);
     if (fetchedMainStocks.length > 0) {
       console.log(
@@ -534,14 +538,17 @@ async function fetchMainStocksData() {
 }
 
 async function fetchSearchableList() {
-  const now = Date.now();
-  if (
-    searchableListCache.data &&
-    now - searchableListCache.lastFetched < CACHE_DURATION
-  ) {
-    console.log("[SearchableList] Serving searchable list from cache.");
-    return searchableListCache.data;
+  // Try to fetch from Redis cache first
+  try {
+    const cachedData = await redis.get(SEARCHABLE_LIST_CACHE_KEY);
+    if (cachedData) {
+      console.log("[SearchableList] Serving searchable list from Redis cache.");
+      return cachedData;
+    }
+  } catch (error) {
+    console.error("[Redis Cache] Error reading searchableList from Redis:", error);
   }
+
   console.log(
     "[SearchableList] Fetching searchable list from internal /api/stocks/allStocks endpoint."
   );
@@ -595,21 +602,20 @@ async function fetchSearchableList() {
       );
     }
 
-    searchableListCache = { data: formattedAssets, lastFetched: now };
+    // Store in Redis cache
+    try {
+      await redis.set(SEARCHABLE_LIST_CACHE_KEY, formattedAssets, { ex: CACHE_DURATION_SECONDS });
+      console.log("[SearchableList] Stored searchable list in Redis cache.");
+    } catch (error) {
+      console.error("[Redis Cache] Error writing searchableList to Redis:", error);
+    }
+    
     return formattedAssets;
   } catch (error) {
     console.error(
       "[SearchableList] Error in fetchSearchableList function:",
       error.message || error.toString()
     );
-    // Fallback to stale cache if available on error
-    if (searchableListCache.data) {
-      console.warn(
-        "[SearchableList] Serving stale searchable list due to fetch error."
-      );
-      return searchableListCache.data;
-    }
-
     throw new Error(`Failed to fetch searchable asset list: ${error.message}`);
   }
 }

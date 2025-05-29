@@ -12,6 +12,8 @@
     "@alpacahq/alpaca-trade-api": "^3.1.2",
     "@api/testalpacadocs": "file:.api/apis/testalpacadocs",
     "@heroicons/react": "^2.2.0",
+    "@upstash/redis": "^1.34.9",
+    "@vercel/kv": "^3.0.0",
     "apexcharts": "^4.3.0",
     "bcrypt": "^5.1.1",
     "chart.js": "^4.4.7",

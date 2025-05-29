@@ -143,4 +143,170 @@ export async function getAlpacaSnapshots(symbols, isCrypto = false) {
   }
 }
 
+/**
+ * Fetches a single snapshot for a stock or crypto symbol from Alpaca and formats it.
+ * @param {string} symbol - The stock or crypto symbol (e.g., "AAPL" or "BTC/USD").
+ * @param {boolean} isCrypto - Flag to indicate if the symbol is a cryptocurrency.
+ * @returns {Promise<object|null>} - Formatted snapshot data or null on error/no data.
+ */
+export async function getAlpacaSnapshot(symbol, isCrypto = false) {
+  const API_KEY = process.env.ALPACA_KEY;
+  const SECRET_KEY = process.env.ALPACA_SECRET_KEY;
+
+  if (!API_KEY || !SECRET_KEY) {
+    console.error("[getAlpacaSnapshot] Alpaca API key or secret key is not defined.");
+    return null;
+  }
+
+  let baseUrl;
+  // Alpaca uses different symbol formats for stocks (AAPL) vs crypto (BTC/USD)
+  const alpacaSymbol = isCrypto ? symbol : symbol.toUpperCase();
+  const encodedSymbol = encodeURIComponent(alpacaSymbol);
+
+  if (isCrypto) {
+    baseUrl = `https://data.alpaca.markets/v1beta3/crypto/us/snapshots?symbols=${encodedSymbol}`;
+  } else {
+    baseUrl = `https://data.alpaca.markets/v2/stocks/snapshots?symbols=${encodedSymbol}`;
+  }
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'GET',
+      headers: {
+        'APCA-API-KEY-ID': API_KEY,
+        'APCA-API-SECRET-KEY': SECRET_KEY,
+        'Accept': 'application/json'
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[getAlpacaSnapshot] API Error for symbol "${alpacaSymbol}" (isCrypto: ${isCrypto}): ${response.status} ${response.statusText}. Body: ${errorText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    
+    // Alpaca returns snapshots in an object where keys are symbols.
+    // For crypto, it's nested: data.snapshots["BTC/USD"]
+    // For stocks, it's direct: data["AAPL"]
+    const snapshotData = isCrypto ? (data.snapshots ? data.snapshots[alpacaSymbol] : null) : data[alpacaSymbol];
+
+    if (!snapshotData) {
+      console.warn(`[getAlpacaSnapshot] No snapshot data found for symbol "${alpacaSymbol}" in Alpaca response. Data:`, data);
+      return null;
+    }
+
+    // Format the snapshot data to the structure expected by route.js
+    // Alpaca snapshot structure varies for stocks vs crypto.
+    // Stocks: snapshotData.latestTrade, snapshotData.dailyBar, snapshotData.prevDailyBar
+    // Crypto: snapshotData.latestTrade, snapshotData.dailyBar (prevDailyBar might be missing or need calculation)
+    
+    let formattedSnapshot = {
+        latestTrade: { 
+            p: snapshotData.latestTrade?.p || null, 
+            x: snapshotData.latestTrade?.x || null // Exchange ID
+        },
+        dailyBar: {
+            o: snapshotData.dailyBar?.o || null,
+            h: snapshotData.dailyBar?.h || null,
+            l: snapshotData.dailyBar?.l || null,
+            c: snapshotData.dailyBar?.c || null,
+            v: snapshotData.dailyBar?.v || null,
+        },
+        prevDailyBar: {
+            c: snapshotData.prevDailyBar?.c || null,
+            // Alpaca crypto snapshots might not have prevDailyBar directly.
+            // If needed, it would require a separate historical fetch for the previous day.
+        },
+        name: symbol, // Alpaca snapshot doesn't usually include the full name
+        type: isCrypto ? 'Crypto' : 'Stock', // Basic type, can be enriched by DB lookup
+        exchange: snapshotData.latestTrade?.x || (isCrypto ? 'Crypto Exchange' : 'US Equity'), // Primary exchange if available
+        source: 'Alpaca',
+        isDelayed: false, // Alpaca data is generally real-time for US equities
+    };
+
+    // If dailyBar.c is null but latestTrade.p is available, use latestTrade.p as current close
+    if (formattedSnapshot.dailyBar.c === null && formattedSnapshot.latestTrade.p !== null) {
+        formattedSnapshot.dailyBar.c = formattedSnapshot.latestTrade.p;
+    }
+
+    // If prevDailyBar.c is null for crypto, it might need to be fetched or handled
+    if (isCrypto && formattedSnapshot.prevDailyBar.c === null) {
+        console.warn(`[getAlpacaSnapshot] Previous day close not available in crypto snapshot for ${symbol}. May need separate fetch.`);
+        // For now, we leave it null. The main route can decide how to handle this (e.g., another API call).
+    }
+
+    return formattedSnapshot;
+
+  } catch (error) {
+    console.error(`[getAlpacaSnapshot] Network or other fetch error for symbol "${alpacaSymbol}" (isCrypto: ${isCrypto}):`, error);
+    return null;
+  }
+}
+
+/**
+ * Fetches news articles for a given symbol from Alpaca.
+ * @param {string} symbol - The stock/crypto symbol.
+ * @param {number} limit - Max number of articles to return.
+ * @returns {Promise<Array<object>|null>} - Array of news articles or null.
+ */
+export async function getAlpacaNews(symbol, limit = 10) {
+  const API_KEY = process.env.ALPACA_KEY;
+  const SECRET_KEY = process.env.ALPACA_SECRET_KEY;
+
+  if (!API_KEY || !SECRET_KEY) {
+    console.error("[getAlpacaNews] Alpaca API key or secret key is not defined.");
+    return null;
+  }
+
+  // Alpaca news API uses comma-separated symbols
+  const alpacaSymbol = symbol.toUpperCase(); // Stocks are uppercase, crypto might be case-sensitive depending on API version
+  const encodedSymbol = encodeURIComponent(alpacaSymbol);
+  
+  // Endpoint: /v1beta1/news (this is an older version, check if there's a newer one)
+  const url = `https://data.alpaca.markets/v1beta1/news?symbols=${encodedSymbol}&limit=${limit}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'APCA-API-KEY-ID': API_KEY,
+        'APCA-API-SECRET-KEY': SECRET_KEY,
+        'Accept': 'application/json'
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[getAlpacaNews] API Error for symbol "${alpacaSymbol}": ${response.status} ${response.statusText}. Body: ${errorText}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.news && data.news.length > 0) {
+      return data.news.map(article => ({
+        id: article.id || article.ID, // Alpaca might use ID or id
+        headline: article.headline,
+        summary: article.summary || article.content || '', // content might be available
+        source_name: article.source || 'Alpaca', // Alpaca news items have a 'source' field
+        url: article.url || article.URL,
+        image_url: article.images && article.images.length > 0 ? article.images[0].url : null,
+        published_at: article.created_at || article.updated_at, // Timestamps
+        symbols: article.symbols || [symbol],
+        source_api: 'Alpaca',
+      }));
+    } else {
+      console.log(`[getAlpacaNews] No news found for symbol "${alpacaSymbol}" from Alpaca.`);
+      return [];
+    }
+
+  } catch (error) {
+    console.error(`[getAlpacaNews] Network or other fetch error for symbol "${alpacaSymbol}":`, error);
+    return null;
+  }
+}
+
+
 export default alpaca;

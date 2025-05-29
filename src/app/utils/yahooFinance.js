@@ -177,17 +177,28 @@ export async function getYahooFinanceNews(symbol, limit = 10) {
       return [];
     }
 
-    const formattedNews = data.news.map((article) => ({
-      title: article.title,
-      url: article.link,
-      source: article.publisher,
-      summary: article.summary || "", // Yahoo search results might not have full summary
-      image: article.thumbnail?.resolutions?.[0]?.url || null, // Use first available thumbnail
-      published_at: new Date(
-        article.provider_publish_time * 1000
-      ).toISOString(),
-      symbols: [symbol], // Assuming the news is primarily for the queried symbol
-    }));
+    const formattedNews = data.news.map((article) => {
+      let publishedAt = null;
+      if (article.provider_publish_time && typeof article.provider_publish_time === 'number') {
+        try {
+          publishedAt = new Date(
+            article.provider_publish_time * 1000
+          ).toISOString();
+        } catch (e) {
+          console.warn(`[Yahoo Finance News] Could not parse publish time for article: ${article.title}`, e);
+        }
+      }
+
+      return {
+        title: article.title,
+        url: article.link,
+        source: article.publisher,
+        summary: article.summary || "", // Yahoo search results might not have full summary
+        image: article.thumbnail?.resolutions?.[0]?.url || null, // Use first available thumbnail
+        published_at: publishedAt,
+        symbols: [symbol], // Assuming the news is primarily for the queried symbol
+      };
+    });
 
     console.log(
       `[Yahoo Finance News] Successfully fetched ${formattedNews.length} news articles for ${symbol}.`
@@ -199,5 +210,119 @@ export async function getYahooFinanceNews(symbol, limit = 10) {
       error
     );
     return [];
+  }
+}
+
+/**
+ * Fetches snapshot data for a given symbol from Yahoo Finance (using the chart API as a proxy for quote).
+ * @param {string} symbol - The stock ticker symbol (e.g., "AAPL", "BTC-USD").
+ * @returns {Promise<object|null>} A promise that resolves to a formatted snapshot object,
+ *                                   or null if fetching fails or no data.
+ */
+export async function getYahooFinanceSnapshot(symbol) {
+  // Yahoo Finance chart endpoint can provide current price, previous close, day high/low, volume.
+  // We use a very short range to get the latest available data.
+  const url = `${YAHOO_CHART_API_BASE_URL}/${encodeURIComponent(symbol)}?range=2d&interval=1d`;
+  console.log(
+    `[Yahoo Finance Snapshot] Fetching snapshot-like data for ${symbol} from URL: ${url}`
+  );
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `[Yahoo Finance Snapshot] API request failed for ${symbol} with status ${response.status}: ${errorText}`
+      );
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (data.chart && data.chart.error) {
+      console.error(
+        `[Yahoo Finance Snapshot] API returned an error for ${symbol}: ${
+          data.chart.error.description || data.chart.error.code
+        }`
+      );
+      return null;
+    }
+
+    if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
+      console.warn(
+        `[Yahoo Finance Snapshot] No chart data found for ${symbol} in response.`
+      );
+      return null;
+    }
+
+    const result = data.chart.result[0];
+    const meta = result.meta;
+    const indicators = result.indicators.quote[0];
+    const timestamps = result.timestamp;
+
+    if (!meta || !indicators || !timestamps || timestamps.length === 0) {
+      console.warn(
+        `[Yahoo Finance Snapshot] Essential data missing in Yahoo response for ${symbol}.`
+      );
+      return null;
+    }
+
+    // Get the latest available data point (usually the last one in the array for 1d interval)
+    const latestIndex = timestamps.length - 1;
+    const previousIndex = timestamps.length > 1 ? timestamps.length - 2 : null;
+
+    const currentPrice = meta.regularMarketPrice !== undefined ? meta.regularMarketPrice : (indicators.close ? indicators.close[latestIndex] : null);
+    const previousClose = meta.chartPreviousClose !== undefined ? meta.chartPreviousClose : (previousIndex !== null && indicators.close ? indicators.close[previousIndex] : null);
+    
+    const dailyOpen = indicators.open ? indicators.open[latestIndex] : null;
+    const dailyHigh = indicators.high ? indicators.high[latestIndex] : null;
+    const dailyLow = indicators.low ? indicators.low[latestIndex] : null;
+    const dailyVolume = indicators.volume ? indicators.volume[latestIndex] : null;
+
+    if (currentPrice === null) {
+        console.warn(`[Yahoo Finance Snapshot] Could not determine current price for ${symbol}.`);
+        return null; // If no current price, snapshot is not useful
+    }
+
+    const formattedSnapshot = {
+      latestTrade: {
+        p: currentPrice,
+        x: meta.exchangeName || null, // Exchange ID/Name
+      },
+      dailyBar: {
+        o: dailyOpen,
+        h: dailyHigh,
+        l: dailyLow,
+        c: currentPrice, // Current price is the most recent closing price for the daily bar
+        v: dailyVolume,
+      },
+      prevDailyBar: {
+        c: previousClose,
+      },
+      name: meta.shortName || meta.longName || symbol,
+      type: meta.instrumentType || (symbol.includes('-') ? 'Crypto' : 'Stock'), // Infer type
+      exchange: meta.exchangeName || null,
+      source: 'Yahoo Finance',
+      isDelayed: meta.exchangeDelay !== undefined ? meta.exchangeDelay > 0 : true, // Assume delayed if not specified
+    };
+
+    console.log(
+      `[Yahoo Finance Snapshot] Successfully processed snapshot for ${symbol}.`
+    );
+    return formattedSnapshot;
+
+  } catch (error) {
+    console.error(
+      `[Yahoo Finance Snapshot] Error fetching or processing snapshot for ${symbol}:`,
+      error
+    );
+    return null;
   }
 }
