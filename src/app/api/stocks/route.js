@@ -259,7 +259,7 @@ export async function GET(request) {
         // Fetch both data sources in parallel
         const [mainStocksData, searchableList] = await Promise.all([
             fetchMainStocksData(),
-            searchableList(),
+            fetchSearchableList(),
         ]);
 
         // Enrich main stocks with names from searchable list
