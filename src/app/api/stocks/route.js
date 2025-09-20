@@ -1,659 +1,292 @@
 import { NextResponse } from "next/server";
-import { Redis } from '@upstash/redis'; 
+import { Redis } from '@upstash/redis';
 import {
-  fetchPolygonRecentHistoricalData,
+    fetchPolygonRecentHistoricalData,
 } from "@/app/utils/polygon";
 import  {
-  getAlpacaHistoricalBars,
-  getAlpacaSnapshots,
+    getAlpacaHistoricalBars,
+    getAlpacaSnapshots,
 } from "@/app/utils/alpaca";
 import {
-  getAlphaVantageHistoricalDaily,
-  getAlphaVantageDigitalCurrencyDaily,
+    getAlphaVantageHistoricalDaily,
+    getAlphaVantageDigitalCurrencyDaily,
 } from "@/app/utils/alphaVantage";
 import { getYahooFinanceHistoricalData } from "@/app/utils/yahooFinance";
 
-// Initialize Upstash Redis client
-const redis = Redis.fromEnv(); 
+// Initialize Redis with explicit config for better error handling
+const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
+});
 
-const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
-const CACHE_DURATION_SECONDS = 30 * 60;  
+const CACHE_DURATION_SECONDS = 30 * 60;
+const MAIN_STOCKS_CACHE_KEY = "mainStocksData";
+const SEARCHABLE_LIST_CACHE_KEY = "searchableListData";
 
-const MAIN_STOCKS_CACHE_KEY = "mainStocksData"; 
-const SEARCHABLE_LIST_CACHE_KEY = "searchableListData"; 
-
-// Define main tickers: stocks/ETFs and crypto
+// Configuration
 const MAIN_STOCK_ETF_TICKERS = [
-  "AAPL",
-  "MSFT",
-  "GOOGL",
-  "TSLA",
-  "AMZN",
-  "NVDA",
-  "SPY",
-  "QQQ",
-  "DIA",
-  "IWM",
+    "AAPL", "MSFT", "GOOGL", "TSLA", "AMZN",
+    "NVDA", "SPY", "QQQ", "DIA", "IWM",
 ];
+
 const MAIN_CRYPTO_TICKERS = [
-  "BTC/USD",
-  "ETH/USD",
-  "SOL/USD",
-  "DOGE/USD",
-  "ADA/USD",
+    "BTC/USD", "ETH/USD", "SOL/USD", "DOGE/USD", "ADA/USD",
 ];
 
-let cryptoDetails = {};
+const CHART_CONFIG = {
+    DAYS_TO_FETCH: 7,
+    MIN_POINTS: 3,
+};
 
-async function fetchMainStocksData() {
-  // Try to fetch from Redis cache first
-  try {
-    const cachedData = await redis.get(MAIN_STOCKS_CACHE_KEY);
-    if (cachedData) {
-      console.log("Serving main stocks data from Redis cache.");
-      return cachedData; 
-    }
-  } catch (error) {
-    console.error("[Redis Cache] Error reading mainStocksData from Redis:", error);
-  }
-
-  console.log(
-    "Fetching main stocks data. Checking MAIN_STOCK_ETF_TICKERS and MAIN_CRYPTO_TICKERS..."
-  );
-  console.log("MAIN_STOCK_ETF_TICKERS:", MAIN_STOCK_ETF_TICKERS);
-  console.log(
-    "Is MAIN_STOCK_ETF_TICKERS an array?",
-    Array.isArray(MAIN_STOCK_ETF_TICKERS)
-  );
-  console.log("MAIN_CRYPTO_TICKERS:", MAIN_CRYPTO_TICKERS);
-  console.log(
-    "Is MAIN_CRYPTO_TICKERS an array?",
-    Array.isArray(MAIN_CRYPTO_TICKERS)
-  );
-
-  try {
-    let fetchedMainStocks = [];
-
-    // Fetch stock/ETF data
-    if (MAIN_STOCK_ETF_TICKERS && MAIN_STOCK_ETF_TICKERS.length > 0) {
-      console.log(
-        "Attempting to fetch stock/ETF snapshots using custom getAlpacaSnapshots for symbols:",
-        MAIN_STOCK_ETF_TICKERS
-      );
-      const stockSnapshotsObject = await getAlpacaSnapshots(
-        MAIN_STOCK_ETF_TICKERS,
-        false
-      );
-      console.log(
-        "Raw stockSnapshotsObject from custom getAlpacaSnapshots:",
-        JSON.stringify(stockSnapshotsObject, null, 2)
-      );
-
-      if (!stockSnapshotsObject) {
-        console.error(
-          "Custom getAlpacaSnapshots for stocks/ETFs returned null or undefined."
-        );
-      } else if (Object.keys(stockSnapshotsObject).length === 0) {
-        console.warn(
-          "Custom getAlpacaSnapshots for stocks/ETFs returned an empty object. No snapshots found for symbols:",
-          MAIN_STOCK_ETF_TICKERS
-        );
-      }
-
-      if (
-        stockSnapshotsObject &&
-        Object.keys(stockSnapshotsObject).length > 0
-      ) {
-        const stockDataPromises = MAIN_STOCK_ETF_TICKERS.map(async (symbol) => {
-          const snapshot = stockSnapshotsObject[symbol];
-          console.log(
-            `Processing stock/ETF: ${symbol}, Snapshot:`,
-            JSON.stringify(snapshot, null, 2)
-          );
-
-          if (snapshot) {
-            const latestPrice =
-              snapshot.latestTrade?.p || snapshot.latestQuote?.ap || null;
-            const dailyChange = snapshot.dailyChange;
-            let changePercent = null;
-
-            if (dailyChange !== undefined && dailyChange !== null) {
-              changePercent = dailyChange * 100;
-            } else {
-              console.warn(
-                `Could not determine changePercent for ${symbol} from snapshot.dailyChange. latestPrice: ${latestPrice}`
-              );
-            }
-
-            let miniChartData = null;
-            const DAYS_TO_FETCH_STOCK = 7;
-            const MIN_POINTS_STOCK = 3;
-
-            // 1. Try Alpaca for stocks
-            console.log(`[Stock MiniChart] Attempting Alpaca for ${symbol}`);
-            let alpacaStockData = await getAlpacaHistoricalBars(
-              symbol,
-              DAYS_TO_FETCH_STOCK,
-              false
-            );
-            let alpacaPoints = alpacaStockData ? alpacaStockData.length : 0;
-
-            if (alpacaStockData && alpacaPoints >= MIN_POINTS_STOCK) {
-              miniChartData = alpacaStockData;
-              console.log(
-                `[Stock MiniChart] Alpaca success for ${symbol}: ${miniChartData.length} points.`
-              );
-            } else {
-              console.warn(
-                `[Stock MiniChart] Alpaca for ${symbol} gave ${alpacaPoints} points (less than ${MIN_POINTS_STOCK}). Trying Polygon.`
-              );
-
-              // 2. Try Polygon for stocks
-              let polygonStockData = await fetchPolygonRecentHistoricalData(
-                symbol,
-                DAYS_TO_FETCH_STOCK
-              );
-              let polygonPoints = polygonStockData
-                ? polygonStockData.length
-                : 0;
-
-              if (polygonStockData && polygonPoints >= MIN_POINTS_STOCK) {
-                miniChartData = polygonStockData;
-                console.log(
-                  `[Stock MiniChart] Polygon success for ${symbol}: ${miniChartData.length} points.`
-                );
-              } else {
-                console.warn(
-                  `[Stock MiniChart] Polygon for ${symbol} gave ${polygonPoints} points (less than ${MIN_POINTS_STOCK}). Trying Alpha Vantage.`
-                );
-
-                // 3. Try Alpha Vantage for stocks
-                let avStockData = await getAlphaVantageHistoricalDaily(
-                  symbol,
-                  DAYS_TO_FETCH_STOCK
-                );
-                let avPoints = avStockData ? avStockData.length : 0;
-
-                if (avStockData && avPoints >= MIN_POINTS_STOCK) {
-                  miniChartData = avStockData;
-                  console.log(
-                    `[Stock MiniChart] Alpha Vantage success for ${symbol}: ${miniChartData.length} points.`
-                  );
-                } else {
-                  console.warn(
-                    `[Stock MiniChart] Alpha Vantage for ${symbol} gave ${avPoints} points. Trying Yahoo Finance.`
-                  );
-
-                  // 4. Try Yahoo Finance for stocks
-                  let yahooStockData = await getYahooFinanceHistoricalData(
-                    symbol,
-                    DAYS_TO_FETCH_STOCK
-                  );
-                  let yahooPoints = yahooStockData ? yahooStockData.length : 0;
-
-                  if (yahooStockData && yahooPoints >= MIN_POINTS_STOCK) {
-                    miniChartData = yahooStockData;
-                    console.log(
-                      `[Stock MiniChart] Yahoo Finance success for ${symbol}: ${miniChartData.length} points.`
-                    );
-                  } else {
-                    console.warn(
-                      `[Stock MiniChart] Yahoo Finance for ${symbol} gave ${yahooPoints} points. Using best available for ${symbol}.`
-                    );
-                    // Select the best of the four, even if less than MIN_POINTS_STOCK
-                    if (
-                      alpacaPoints >= polygonPoints &&
-                      alpacaPoints >= avPoints &&
-                      alpacaPoints >= yahooPoints &&
-                      alpacaPoints > 0
-                    ) {
-                      miniChartData = alpacaStockData;
-                    } else if (
-                      polygonPoints > alpacaPoints &&
-                      polygonPoints >= avPoints &&
-                      polygonPoints >= yahooPoints &&
-                      polygonPoints > 0
-                    ) {
-                      miniChartData = polygonStockData;
-                    } else if (
-                      avPoints > alpacaPoints &&
-                      avPoints > polygonPoints &&
-                      avPoints >= yahooPoints &&
-                      avPoints > 0
-                    ) {
-                      miniChartData = avStockData;
-                    } else if (yahooPoints > 0) {
-                      miniChartData = yahooStockData;
-                    } else {
-                      miniChartData =
-                        alpacaStockData && alpacaPoints > 0
-                          ? alpacaStockData
-                          : polygonStockData && polygonPoints > 0
-                          ? polygonStockData
-                          : avStockData && avPoints > 0
-                          ? avStockData
-                          : []; // Default to best available or empty
-                    }
-
-                    if (miniChartData && miniChartData.length > 0) {
-                      console.log(
-                        `[Stock MiniChart] Best available for ${symbol} (from fallbacks) has ${miniChartData.length} points.`
-                      );
-                    } else {
-                      console.log(
-                        `[Stock MiniChart] No chart data found for ${symbol} after all fallbacks.`
-                      );
-                      miniChartData = [];
-                    }
-                  }
-                }
-              }
-            }
-            if (!miniChartData) miniChartData = []; // Final safety net
-
-            // Calculate changePercent from miniChartData if not available from snapshot
-            if (
-              (changePercent === null ||
-                typeof changePercent !== "number" ||
-                isNaN(changePercent)) &&
-              miniChartData &&
-              miniChartData.length >= 2
-            ) {
-              const currentClose = miniChartData[miniChartData.length - 1].c;
-              const previousClose = miniChartData[miniChartData.length - 2].c;
-              if (
-                typeof currentClose === "number" &&
-                typeof previousClose === "number" &&
-                previousClose !== 0
-              ) {
-                changePercent =
-                  ((currentClose - previousClose) / previousClose) * 100;
-                console.log(
-                  `[Stock MiniChart] Calculated changePercent for ${symbol}: ${changePercent.toFixed(
-                    2
-                  )}% from miniChartData.`
-                );
-              } else {
-                console.warn(
-                  `[Stock MiniChart] Could not calculate changePercent for ${symbol} from miniChartData due to invalid close prices or previousClose being zero.`
-                );
-              }
-            }
-
-            return {
-              symbol: symbol,
-              name: symbol,
-              price: latestPrice,
-              changePercent: changePercent,
-              exchangeShortName:
-                snapshot.latestTrade?.x || snapshot.latestQuote?.x || "N/A",
-              type: "Stock/ETF",
-              source: "Alpaca",
-              isDelayed: false,
-              miniChartData: miniChartData,
-            };
-          } else {
-            console.warn(
-              `No snapshot data found in stockSnapshotsObject for symbol: ${symbol}`
-            );
-            return null;
-          }
-        });
-        const resolvedStockData = (await Promise.all(stockDataPromises)).filter(
-          (item) => item !== null
-        );
-        fetchedMainStocks.push(...resolvedStockData);
-      } else {
-        console.log(
-          "No stock/ETF snapshots to process from stockSnapshotsObject."
-        );
-      }
-    } else {
-      console.log("No MAIN_STOCK_ETF_TICKERS to fetch.");
-    }
-
-    // Fetch crypto data
-    if (MAIN_CRYPTO_TICKERS && MAIN_CRYPTO_TICKERS.length > 0) {
-      console.log(
-        "Attempting to fetch crypto snapshots using custom getAlpacaSnapshots for symbols:",
-        MAIN_CRYPTO_TICKERS
-      );
-      const cryptoSnapshots = await getAlpacaSnapshots(
-        MAIN_CRYPTO_TICKERS,
-        true
-      );
-      console.log(
-        "Raw cryptoSnapshots from custom getAlpacaSnapshots:",
-        JSON.stringify(cryptoSnapshots, null, 2)
-      );
-
-      if (!cryptoSnapshots) {
-        console.error(
-          "Custom getAlpacaSnapshots returned null or undefined for crypto."
-        );
-      } else if (Object.keys(cryptoSnapshots).length === 0) {
-        console.warn(
-          "Custom getAlpacaSnapshots returned an empty object for crypto. No crypto snapshots found for symbols:",
-          MAIN_CRYPTO_TICKERS
-        );
-      }
-
-      const cryptoDataPromises = MAIN_CRYPTO_TICKERS.map(
-        async (originalSymbol) => {
-          console.log(`Processing crypto: ${originalSymbol}`);
-          const snapshot = cryptoSnapshots
-            ? cryptoSnapshots[originalSymbol]
-            : null;
-          console.log(
-            `Snapshot for ${originalSymbol}:`,
-            JSON.stringify(snapshot, null, 2)
-          );
-
-          if (snapshot) {
-            console.log(`Processing crypto for main page: ${originalSymbol}`);
-            const polygonSymbol = originalSymbol.includes("/")
-              ? `X:${originalSymbol.replace("/", "")}`
-              : originalSymbol;
-            const alphaVantageCryptoSymbol = originalSymbol.split("/")[0]; 
-
-            let miniChartData = null;
-            const DAYS_TO_FETCH_CRYPTO = 7;
-            const MIN_POINTS_CRYPTO = 3; // Prefer at least 3 points
-
-            // 1. Try Polygon for Crypto
-            console.log(
-              `[Crypto MiniChart] Attempting Polygon for ${originalSymbol} (using ${polygonSymbol})`
-            );
-            let polygonCryptoData = await fetchPolygonRecentHistoricalData(
-              polygonSymbol,
-              DAYS_TO_FETCH_CRYPTO
-            );
-            let polygonPoints = polygonCryptoData
-              ? polygonCryptoData.length
-              : 0;
-
-            if (polygonCryptoData && polygonPoints >= MIN_POINTS_CRYPTO) {
-              miniChartData = polygonCryptoData;
-              console.log(
-                `[Crypto MiniChart] Polygon success for ${originalSymbol}: ${miniChartData.length} points.`
-              );
-            } else {
-              console.warn(
-                `[Crypto MiniChart] Polygon for ${originalSymbol} gave ${polygonPoints} points (less than ${MIN_POINTS_CRYPTO}). Trying Alpaca.`
-              );
-
-              // 2. Try Alpaca for Crypto
-              let alpacaCryptoData = await getAlpacaHistoricalBars(
-                originalSymbol,
-                DAYS_TO_FETCH_CRYPTO,
-                true
-              );
-              let alpacaPoints = alpacaCryptoData ? alpacaCryptoData.length : 0;
-
-              if (alpacaCryptoData && alpacaPoints >= MIN_POINTS_CRYPTO) {
-                miniChartData = alpacaCryptoData;
-                console.log(
-                  `[Crypto MiniChart] Alpaca success for ${originalSymbol}: ${miniChartData.length} points.`
-                );
-              } else {
-                console.warn(
-                  `[Crypto MiniChart] Alpaca for ${originalSymbol} gave ${alpacaPoints} points (less than ${MIN_POINTS_CRYPTO}). Trying Alpha Vantage.`
-                );
-
-                // 3. Try Alpha Vantage for Crypto
-                let avCryptoData = await getAlphaVantageDigitalCurrencyDaily(
-                  alphaVantageCryptoSymbol,
-                  DAYS_TO_FETCH_CRYPTO
-                );
-                let avPoints = avCryptoData ? avCryptoData.length : 0;
-
-                if (avCryptoData && avPoints >= MIN_POINTS_CRYPTO) {
-                  miniChartData = avCryptoData;
-                  console.log(
-                    `[Crypto MiniChart] Alpha Vantage success for ${originalSymbol}: ${miniChartData.length} points.`
-                  );
-                } else {
-                  console.warn(
-                    `[Crypto MiniChart] Alpha Vantage for ${originalSymbol} gave ${avPoints} points. Using best available for ${originalSymbol}.`
-                  );
-
-                  if (
-                    polygonPoints >= alpacaPoints &&
-                    polygonPoints >= avPoints &&
-                    polygonPoints > 0
-                  ) {
-                    miniChartData = polygonCryptoData;
-                  } else if (
-                    alpacaPoints > polygonPoints &&
-                    alpacaPoints >= avPoints &&
-                    alpacaPoints > 0
-                  ) {
-                    // check alpaca only if it's strictly better than polygon
-                    miniChartData = alpacaCryptoData;
-                  } else if (avPoints > 0) {
-                    // Check AV if it has any points and others were worse or zero
-                    miniChartData = avCryptoData;
-                  } else {
-                    miniChartData =
-                      polygonCryptoData && polygonPoints > 0
-                        ? polygonCryptoData
-                        : alpacaCryptoData && alpacaPoints > 0
-                        ? alpacaCryptoData
-                        : []; // Default to polygon if it had data, else alpaca, else empty
-                  }
-
-                  if (miniChartData && miniChartData.length > 0) {
-                    console.log(
-                      `[Crypto MiniChart] Best available for ${originalSymbol} (from fallbacks) has ${miniChartData.length} points.`
-                    );
-                  } else {
-                    console.log(
-                      `[Crypto MiniChart] No chart data found for ${originalSymbol} after all fallbacks.`
-                    );
-                    miniChartData = [];
-                  }
-                }
-              }
-            }
-            if (!miniChartData) miniChartData = []; // Final safety net
-
-            // Safely access cryptoDetails
-            const nameFromDetails = cryptoDetails[originalSymbol]?.name;
-
-            return {
-              symbol: originalSymbol,
-              name: nameFromDetails || originalSymbol, // Use fetched name if available, otherwise default to symbol
-              price:
-                snapshot.latestTrade?.p || snapshot.latestQuote?.ap || null,
-              changePercent:
-                snapshot.dailyBar &&
-                snapshot.prevDailyBar &&
-                typeof snapshot.dailyBar.c === "number" &&
-                typeof snapshot.prevDailyBar.c === "number" &&
-                snapshot.prevDailyBar.c !== 0
-                  ? ((snapshot.dailyBar.c - snapshot.prevDailyBar.c) /
-                      snapshot.prevDailyBar.c) *
-                    100
-                  : snapshot.dailyChange !== undefined &&
-                    snapshot.dailyChange !== null
-                  ? snapshot.dailyChange * 100
-                  : null,
-              exchangeShortName:
-                snapshot.latestTrade?.x || snapshot.latestQuote?.x || "CRYPTO",
-              type: "Crypto",
-              source: "Alpaca",
-              isDelayed: false,
-              miniChartData:
-                miniChartData && miniChartData.length > 0 ? miniChartData : [],
-            };
-          } else {
-            console.warn(
-              `No snapshot data found in cryptoSnapshots object for crypto symbol: ${originalSymbol}`
-            );
-            return null;
-          }
-        }
-      );
-
-      const resolvedCryptoData = (await Promise.all(cryptoDataPromises)).filter(
-        (item) => item !== null
-      );
-      fetchedMainStocks.push(...resolvedCryptoData);
-      console.log(
-        "Resolved crypto data (after filtering nulls):",
-        JSON.stringify(resolvedCryptoData, null, 2)
-      );
-    } else {
-      console.log("No MAIN_CRYPTO_TICKERS to fetch.");
-    }
-
-    // Store in Redis cache
+// Utility functions
+async function safeRedisOperation(operation, fallback = null) {
     try {
-      await redis.set(MAIN_STOCKS_CACHE_KEY, fetchedMainStocks, { ex: CACHE_DURATION_SECONDS });
-      console.log("Stored main stocks data in Redis cache.");
+        return await operation();
     } catch (error) {
-      console.error("[Redis Cache] Error writing mainStocksData to Redis:", error);
+        console.error('[Redis] Operation failed:', error.message);
+        return fallback;
+    }
+}
+
+// Generic chart data fetcher with parallel API calls
+async function fetchChartDataParallel(symbol, isTypeCrypto = false) {
+    const promises = [];
+
+    if (isTypeCrypto) {
+        const polygonSymbol = symbol.includes("/") ? `X:${symbol.replace("/", "")}` : symbol;
+        const alphaVantageSymbol = symbol.split("/")[0];
+
+        promises.push(
+            fetchPolygonRecentHistoricalData(polygonSymbol, CHART_CONFIG.DAYS_TO_FETCH)
+                .catch(() => null),
+            getAlpacaHistoricalBars(symbol, CHART_CONFIG.DAYS_TO_FETCH, true)
+                .catch(() => null),
+            getAlphaVantageDigitalCurrencyDaily(alphaVantageSymbol, CHART_CONFIG.DAYS_TO_FETCH)
+                .catch(() => null)
+        );
+    } else {
+        promises.push(
+            getAlpacaHistoricalBars(symbol, CHART_CONFIG.DAYS_TO_FETCH, false)
+                .catch(() => null),
+            fetchPolygonRecentHistoricalData(symbol, CHART_CONFIG.DAYS_TO_FETCH)
+                .catch(() => null),
+            getAlphaVantageHistoricalDaily(symbol, CHART_CONFIG.DAYS_TO_FETCH)
+                .catch(() => null),
+            getYahooFinanceHistoricalData(symbol, CHART_CONFIG.DAYS_TO_FETCH)
+                .catch(() => null)
+        );
     }
 
-    console.log("Total fetchedMainStocks count:", fetchedMainStocks.length);
-    if (fetchedMainStocks.length > 0) {
-      console.log(
-        "First item in fetchedMainStocks:",
-        JSON.stringify(fetchedMainStocks[0], null, 2)
-      );
+    const results = await Promise.allSettled(promises);
+    const chartDataArrays = results
+        .filter(result => result.status === 'fulfilled' && result.value)
+        .map(result => result.value)
+        .filter(data => Array.isArray(data) && data.length > 0);
+
+    // Return the dataset with the most points, preferring those with MIN_POINTS+
+    const bestData = chartDataArrays
+            .sort((a, b) => b.length - a.length)
+            .find(data => data.length >= CHART_CONFIG.MIN_POINTS) ||
+        chartDataArrays[0] || [];
+
+    console.log(`[Chart] ${symbol}: Found ${bestData.length} data points`);
+    return bestData;
+}
+
+// Calculate change percentage from chart data
+function calculateChangePercent(miniChartData) {
+    if (!miniChartData || miniChartData.length < 2) return null;
+
+    const currentClose = miniChartData[miniChartData.length - 1].c;
+    const previousClose = miniChartData[miniChartData.length - 2].c;
+
+    if (typeof currentClose !== 'number' || typeof previousClose !== 'number' || previousClose === 0) {
+        return null;
     }
-    return fetchedMainStocks;
-  } catch (error) {
-    console.error(
-      "Error in fetchMainStocksData function:",
-      error.message,
-      "Stack trace:",
-      error.stack
-    );
-    // More specific error logging for the API response
-    throw new Error(
-      `Failed to fetch main stocks data. Original error: ${error.message}`
-    );
-  }
+
+    return ((currentClose - previousClose) / previousClose) * 100;
+}
+
+// Process individual stock/crypto data
+async function processAssetData(symbol, snapshot, isTypeCrypto = false) {
+    if (!snapshot) {
+        console.warn(`No snapshot data for ${symbol}`);
+        return null;
+    }
+
+    const latestPrice = snapshot.latestTrade?.p || snapshot.latestQuote?.ap || null;
+    let changePercent = null;
+
+    // Try to get change percent from snapshot first
+    if (isTypeCrypto) {
+        if (snapshot.dailyBar?.c && snapshot.prevDailyBar?.c && snapshot.prevDailyBar.c !== 0) {
+            changePercent = ((snapshot.dailyBar.c - snapshot.prevDailyBar.c) / snapshot.prevDailyBar.c) * 100;
+        } else if (snapshot.dailyChange !== undefined) {
+            changePercent = snapshot.dailyChange * 100;
+        }
+    } else {
+        if (snapshot.dailyChange !== undefined) {
+            changePercent = snapshot.dailyChange * 100;
+        }
+    }
+
+    // Fetch chart data in parallel
+    const miniChartData = await fetchChartDataParallel(symbol, isTypeCrypto);
+
+    // Calculate change percent from chart data if not available from snapshot
+    if (changePercent === null || isNaN(changePercent)) {
+        changePercent = calculateChangePercent(miniChartData);
+    }
+
+    return {
+        symbol,
+        name: symbol, // Will be enriched later
+        price: latestPrice,
+        changePercent,
+        exchangeShortName: snapshot.latestTrade?.x || snapshot.latestQuote?.x || (isTypeCrypto ? "CRYPTO" : "N/A"),
+        type: isTypeCrypto ? "Crypto" : "Stock/ETF",
+        source: "Alpaca",
+        isDelayed: false,
+        miniChartData,
+    };
+}
+
+// Main data fetching functions
+async function fetchMainStocksData() {
+    // Try cache first
+    const cachedData = await safeRedisOperation(() => redis.get(MAIN_STOCKS_CACHE_KEY));
+    if (cachedData) {
+        console.log("Serving main stocks data from Redis cache.");
+        return cachedData;
+    }
+
+    console.log("Fetching fresh main stocks data...");
+
+    try {
+        // Fetch snapshots in parallel
+        const [stockSnapshots, cryptoSnapshots] = await Promise.allSettled([
+            getAlpacaSnapshots(MAIN_STOCK_ETF_TICKERS, false),
+            getAlpacaSnapshots(MAIN_CRYPTO_TICKERS, true)
+        ]);
+
+        const stockSnapshotsData = stockSnapshots.status === 'fulfilled' ? stockSnapshots.value : {};
+        const cryptoSnapshotsData = cryptoSnapshots.status === 'fulfilled' ? cryptoSnapshots.value : {};
+
+        // Process all assets in parallel
+        const allProcessingPromises = [
+            // Process stocks
+            ...MAIN_STOCK_ETF_TICKERS.map(symbol =>
+                processAssetData(symbol, stockSnapshotsData[symbol], false)
+            ),
+            // Process crypto
+            ...MAIN_CRYPTO_TICKERS.map(symbol =>
+                processAssetData(symbol, cryptoSnapshotsData[symbol], true)
+            )
+        ];
+
+        const results = await Promise.allSettled(allProcessingPromises);
+        const fetchedMainStocks = results
+            .filter(result => result.status === 'fulfilled' && result.value)
+            .map(result => result.value);
+
+        console.log(`Successfully processed ${fetchedMainStocks.length} assets`);
+
+        // Cache the results
+        await safeRedisOperation(() =>
+            redis.set(MAIN_STOCKS_CACHE_KEY, fetchedMainStocks, { ex: CACHE_DURATION_SECONDS })
+        );
+
+        return fetchedMainStocks;
+
+    } catch (error) {
+        console.error("Error in fetchMainStocksData:", error.message);
+        throw new Error(`Failed to fetch main stocks data: ${error.message}`);
+    }
 }
 
 async function fetchSearchableList() {
-  // Try to fetch from Redis cache first
-  try {
-    const cachedData = await redis.get(SEARCHABLE_LIST_CACHE_KEY);
+    // Try cache first
+    const cachedData = await safeRedisOperation(() => redis.get(SEARCHABLE_LIST_CACHE_KEY));
     if (cachedData) {
-      console.log("[SearchableList] Serving searchable list from Redis cache.");
-      return cachedData;
-    }
-  } catch (error) {
-    console.error("[Redis Cache] Error reading searchableList from Redis:", error);
-  }
-
-  console.log(
-    "[SearchableList] Fetching searchable list from internal /api/stocks/allStocks endpoint."
-  );
-
-  try {
-  
-    const internalApiUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"; 
-    const response = await fetch(`${internalApiUrl}/api/stocks/allStocks`);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(
-        "[SearchableList] Error fetching from /api/stocks/allStocks:",
-        response.status,
-        errorData.message
-      );
-      throw new Error(
-        `Failed to fetch from /api/stocks/allStocks: ${
-          errorData.message || response.statusText
-        }`
-      );
+        console.log("Serving searchable list from Redis cache.");
+        return cachedData;
     }
 
-    const result = await response.json();
+    console.log("Fetching fresh searchable list...");
 
-    if (!result.success || !Array.isArray(result.data)) {
-      console.error(
-        "[SearchableList] /api/stocks/allStocks did not return successful data array:",
-        result
-      );
-      throw new Error("Invalid data format from /api/stocks/allStocks");
-    }
-
-    const formattedAssets = result.data.map((asset) => ({
-      symbol: asset.symbol, 
-      name: asset.name, 
-      exchangeShortName: asset.exchangeShortName,
-      type: asset.type,
-      country: asset.country,
-      marketIdentifier: asset.marketIdentifier,
-    }));
-
-    console.log(
-      `[SearchableList] Fetched ${formattedAssets.length} assets from MongoDB.`
-    );
-    if (formattedAssets.length > 0) {
-      console.log(
-        "[SearchableList] Sample of first 5 assets from MongoDB:",
-        formattedAssets.slice(0, 5)
-      );
-    }
-
-    // Store in Redis cache
     try {
-      await redis.set(SEARCHABLE_LIST_CACHE_KEY, formattedAssets, { ex: CACHE_DURATION_SECONDS });
-      console.log("[SearchableList] Stored searchable list in Redis cache.");
+        const internalApiUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+        const response = await fetch(`${internalApiUrl}/api/stocks/allStocks`);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(`Failed to fetch searchable list: ${errorData.message}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success || !Array.isArray(result.data)) {
+            throw new Error("Invalid data format from searchable list API");
+        }
+
+        const formattedAssets = result.data.map(asset => ({
+            symbol: asset.symbol,
+            name: asset.name,
+            exchangeShortName: asset.exchangeShortName,
+            type: asset.type,
+            country: asset.country,
+            marketIdentifier: asset.marketIdentifier,
+        }));
+
+        console.log(`Fetched ${formattedAssets.length} searchable assets`);
+
+        // Cache the results
+        await safeRedisOperation(() =>
+            redis.set(SEARCHABLE_LIST_CACHE_KEY, formattedAssets, { ex: CACHE_DURATION_SECONDS })
+        );
+
+        return formattedAssets;
+
     } catch (error) {
-      console.error("[Redis Cache] Error writing searchableList to Redis:", error);
+        console.error("Error in fetchSearchableList:", error.message);
+        throw new Error(`Failed to fetch searchable list: ${error.message}`);
     }
-    
-    return formattedAssets;
-  } catch (error) {
-    console.error(
-      "[SearchableList] Error in fetchSearchableList function:",
-      error.message || error.toString()
-    );
-    throw new Error(`Failed to fetch searchable asset list: ${error.message}`);
-  }
 }
 
+// Main API handler
 export async function GET(request) {
-  try {
-    const mainStocksPromise = fetchMainStocksData();
-    const searchableListPromise = fetchSearchableList();
+    try {
+        // Fetch both data sources in parallel
+        const [mainStocksData, searchableList] = await Promise.all([
+            fetchMainStocksData(),
+            searchableList(),
+        ]);
 
-    // Await both promises concurrently
-    const [mainStocksData, searchableList] = await Promise.all([
-      mainStocksPromise,
-      searchableListPromise,
-    ]);
+        // Enrich main stocks with names from searchable list
+        const enrichedMainStocksData = mainStocksData.map(mainStock => {
+            const assetInfo = searchableList.find(asset => asset.symbol === mainStock.symbol);
+            return {
+                ...mainStock,
+                name: assetInfo?.name || mainStock.name,
+            };
+        });
 
-    // Enrich mainStocksData with names from searchableList for better display
-    const enrichedMainStocksData = mainStocksData.map((mainStock) => {
-      const assetInfo = searchableList.find(
-        (s) => s.symbol === mainStock.symbol
-      );
-      return {
-        ...mainStock,
-        name: assetInfo?.name || mainStock.name, 
-      };
-    });
+        return NextResponse.json({
+            success: true,
+            data: {
+                mainStocksData: enrichedMainStocksData,
+                searchableList,
+            },
+        });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        mainStocksData: enrichedMainStocksData,
-        searchableList: searchableList,
-      },
-    });
-  } catch (error) {
-    console.error("[API/STOCKS] Error:", error.message || error.toString());
-    return NextResponse.json(
-      { success: false, message: error.message || "Internal server error." },
-      { status: 500 }
-    );
-  }
+    } catch (error) {
+        console.error("[API/STOCKS] Error:", error.message);
+        return NextResponse.json(
+            {
+                success: false,
+                message: error.message || "Internal server error"
+            },
+            { status: 500 }
+        );
+    }
 }
