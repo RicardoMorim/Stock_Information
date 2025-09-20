@@ -13,11 +13,9 @@ import {
 } from "@/app/utils/alphaVantage";
 import { getYahooFinanceHistoricalData } from "@/app/utils/yahooFinance";
 
-// Initialize Redis with explicit config for better error handling
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
-});
+// Initialize Redis with Vercel KV credentials
+const redis = Redis.fromEnv();
+
 
 const CACHE_DURATION_SECONDS = 30 * 60;
 const MAIN_STOCKS_CACHE_KEY = "mainStocksData";

@@ -9,10 +9,7 @@ import { fetchAllFinancialMetrics } from "@/app/services/fundamentalsService";
 import { getAssetDetails } from "@/app/services/assetService";
 
 // Initialize Upstash Redis client
-const redis = new Redis({
-    url: process.env.KV_REST_API_URL,
-    token: process.env.KV_REST_API_TOKEN,
-});
+const redis = Redis.fromEnv();
 
 // Cache duration: 15 minutes
 const CACHE_DURATION_SECONDS = 15 * 60;
