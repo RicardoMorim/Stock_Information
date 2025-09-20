@@ -14,11 +14,11 @@ import {
 import { getYahooFinanceHistoricalData } from "@/app/utils/yahooFinance";
 
 // Initialize Redis with Vercel KV credentials
-const redis = new Redis({
-    url: process.env.KV_REST_API_URL,
-    token: process.env.KV_REST_API_TOKEN,
+const redis = Redis.fromEnv();
+console.log('Redis config debug:', {
+    url: process.env.KV_REST_API_URL ? 'present' : 'missing',
+    token: process.env.KV_REST_API_TOKEN ? 'present' : 'missing',
 });
-
 const CACHE_DURATION_SECONDS = 30 * 60;
 const MAIN_STOCKS_CACHE_KEY = "mainStocksData";
 const SEARCHABLE_LIST_CACHE_KEY = "searchableListData";
