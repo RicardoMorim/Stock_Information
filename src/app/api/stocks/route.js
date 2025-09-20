@@ -14,8 +14,10 @@ import {
 import { getYahooFinanceHistoricalData } from "@/app/utils/yahooFinance";
 
 // Initialize Redis with Vercel KV credentials
-const redis = Redis.fromEnv();
-
+const redis = new Redis({
+    url: process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+});
 
 const CACHE_DURATION_SECONDS = 30 * 60;
 const MAIN_STOCKS_CACHE_KEY = "mainStocksData";
