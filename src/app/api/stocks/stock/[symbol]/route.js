@@ -11,10 +11,6 @@ import { getAssetDetails } from "@/app/services/assetService";
 // Initialize Upstash Redis client
 const redis = Redis.fromEnv();
 
-console.log('Upstash env check:', {
-    url: process.env.UPSTASH_REDIS_REST_URL ? 'present' : 'missing',
-    token: process.env.UPSTASH_REDIS_REST_TOKEN ? 'present' : 'missing'
-});
 
 // Cache duration: 15 minutes
 const CACHE_DURATION_SECONDS = 15 * 60;
