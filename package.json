@@ -26,6 +26,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.4",
     "next": "^15.1.0",
+    "openai": "^6.9.1",
     "react": "^19.0.0",
     "react-apexcharts": "^1.7.0",
     "react-chartjs-2": "^5.2.0",

@@ -9,6 +9,7 @@ import KeyMetrics from "@/app/components/Stock/KeyMetrics";
 import NewsSection from "@/app/components/Stock/NewsSection";
 import SECFilingsSection from "@/app/components/Stock/SECFilingsSection";
 import FilingViewModal from "@/app/components/Stock/FilingViewModal";
+import StockAIInsights from "@/app/components/Stock/StockAIInsights";
 import { useAuth } from "@/app/contexts/AuthContext";
 
 const getCachedData = (symbol, type) => {
@@ -271,6 +272,8 @@ export default function StockDetails() {
       <PriceChart historicalData={historicalData} symbol={symbol} />
 
       <KeyMetrics metrics={keyMetricsData} />
+
+      <StockAIInsights symbol={symbol} />
 
       {Array.isArray(news) && news.length > 0 && (
         <NewsSection news={news} symbol={symbol} />

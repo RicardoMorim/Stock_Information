@@ -6,6 +6,7 @@ import PortfolioSkeleton from "@/app/components/Portfolio/PortfolioSkeleton";
 import PortfolioHeader from "@/app/components/Portfolio/PortfolioHeader";
 import AddStockForm from "@/app/components/Portfolio/AddStockForm";
 import PortfolioTable from "@/app/components/Portfolio/PortfolioTable";
+import PortfolioAIInsights from "@/app/components/Portfolio/PortfolioAIInsights";
 import { useAuth } from "@/app/contexts/AuthContext";
 
 export default function PortfolioPage() {
@@ -238,6 +239,8 @@ export default function PortfolioPage() {
       )}
 
       <AddStockForm onAddStock={handleAddStock} isAdding={isAdding} />
+
+      <PortfolioAIInsights />
 
       {isLoading && portfolio?.data && (
         <div className="text-center py-4">
