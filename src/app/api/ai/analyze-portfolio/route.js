@@ -14,6 +14,7 @@ import { fetchAllFinancialMetrics } from '@/app/services/fundamentalsService';
 import { getFearGreedIndex, interpretFearGreed } from '@/app/utils/fearGreedService';
 import { aggregatePortfolioHoldings, calculatePortfolioSummary, processHoldingsWithMarketData } from '../../portfolio/route';
 import { fetchStockPrices, getExchangeRates } from '@/app/utils/portfolioUtils';
+import { analyzePricePatternWithAI, getFallbackPattern } from '@/app/services/PriceMovementAIHelper';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -113,71 +114,85 @@ function calculateTechnicalIndicators(historicalData, currentPrice) {
 /**
  * Extract historical trends
  */
-function extractHistoricalTrends(historicalData, currentPrice) {
-  if (!historicalData || historicalData.length === 0) {
-    return {
-      trend: 'insufficient data',
-      volatility: 'low',
-      pattern: 'unknown',
-      summary: 'No historical data available'
-    };
-  }
-
-  try {
-    const prices = historicalData.map(d => d.c || d.close).filter(p => p !== null && !isNaN(p));
-    if (prices.length < 30) {
-      return {
-        trend: 'limited data',
-        volatility: 'unknown',
-        pattern: 'unknown',
-        summary: 'Limited historical data available'
-      };
+async function extractHistoricalTrends(historicalData, currentPrice, symbol = 'STOCK') {
+    if (!historicalData || historicalData.length === 0) {
+        return {
+            trend: 'insufficient data',
+            volatility: 'low',
+            pattern: 'unknown',
+            summary: 'No historical data available'
+        };
     }
 
-    // Calculate price change
-    const firstPrice = prices[0];
-    const lastPrice = prices[prices.length - 1];
-    const priceChange = ((lastPrice - firstPrice) / firstPrice) * 100;
+    try {
+        const prices = historicalData.map(d => d.c || d.close).filter(p => p !== null && !isNaN(p));
+        if (prices.length < 30) {
+            return {
+                trend: 'limited data',
+                volatility: 'unknown',
+                pattern: 'unknown',
+                summary: 'Limited historical data available'
+            };
+        }
 
-    // Determine trend
-    let trend = 'neutral';
-    if (priceChange > 10) trend = 'strong uptrend';
-    else if (priceChange > 3) trend = 'moderate uptrend';
-    else if (priceChange < -10) trend = 'strong downtrend';
-    else if (priceChange < -3) trend = 'moderate downtrend';
+        // Calculate price change
+        const firstPrice = prices[0];
+        const lastPrice = prices[prices.length - 1];
+        const priceChange = ((lastPrice - firstPrice) / firstPrice) * 100;
 
-    // Calculate volatility
-    const returns = [];
-    for (let i = 1; i < prices.length; i++) {
-      returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+        // Determine trend
+        let trend = 'neutral';
+        if (priceChange > 10) trend = 'strong uptrend';
+        else if (priceChange > 3) trend = 'moderate uptrend';
+        else if (priceChange < -10) trend = 'strong downtrend';
+        else if (priceChange < -3) trend = 'moderate downtrend';
+
+        // Calculate volatility
+        const returns = [];
+        for (let i = 1; i < prices.length; i++) {
+            returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+        }
+
+        const volatility = calculateStandardDeviation(returns) * Math.sqrt(252) * 100;
+        let volatilityLevel = 'low';
+        if (volatility > 40) volatilityLevel = 'very high';
+        else if (volatility > 30) volatilityLevel = 'high';
+        else if (volatility > 20) volatilityLevel = 'moderate';
+
+        // Get AI-powered pattern analysis (with timeout to prevent blocking)
+        let pattern = 'price movement pattern';
+        try {
+            const patternPromise = analyzePricePatternWithAI(symbol, prices.slice(-30), trend, volatility, priceChange);
+            // Set a 2-second timeout for AI response
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Pattern analysis timeout')), 2000)
+            );
+
+            pattern = await Promise.race([patternPromise, timeoutPromise]);
+        } catch (aiError) {
+            console.warn('[HistoricalTrends] AI pattern analysis timed out or failed, using fallback:', aiError.message);
+            pattern = getFallbackPattern(trend, volatility, priceChange);
+        }
+
+        // Create comprehensive summary
+        return {
+            trend,
+            volatility: volatilityLevel,
+            volatilityPercent: volatility,
+            pattern,
+            priceChangePercent: priceChange,
+            summary: `${trend} with ${volatilityLevel} volatility. Pattern: ${pattern}.`
+        };
+    } catch (error) {
+        console.error('[HistoricalTrends] Error:', error);
+        return {
+            trend: 'error',
+            volatility: 'unknown',
+            pattern: 'unknown',
+            summary: 'Error analyzing historical trends'
+        };
     }
-
-    const volatility = calculateStandardDeviation(returns) * Math.sqrt(252) * 100;
-    let volatilityLevel = 'low';
-    if (volatility > 40) volatilityLevel = 'very high';
-    else if (volatility > 30) volatilityLevel = 'high';
-    else if (volatility > 20) volatilityLevel = 'moderate';
-
-    // Create summary
-    return {
-      trend,
-      volatility: volatilityLevel,
-      volatilityPercent: volatility,
-      pattern: 'price movement pattern',
-      priceChangePercent: priceChange,
-      summary: `${trend} with ${volatilityLevel} volatility`
-    };
-  } catch (error) {
-    console.error('[HistoricalTrends] Error:', error);
-    return {
-      trend: 'error',
-      volatility: 'unknown',
-      pattern: 'unknown',
-      summary: 'Error analyzing historical trends'
-    };
-  }
 }
-
 /**
  * Calculate standard deviation
  */
