@@ -94,47 +94,36 @@ export default function StockDetails() {
         }
         const apiResponse = await response.json();
 
-        if (
-          apiResponse.success &&
-          apiResponse.data &&
-          typeof apiResponse.data === "object" &&
-          apiResponse.data.data
-        ) {
-          console.log(
-            "StockDetails page: Extracted stock properties from apiResponse.data.data:",
-            JSON.stringify(apiResponse.data.data, null, 2)
-          );
 
-          // Cache the data
-          setCachedData(symbol, "details", apiResponse.data.data);
+        // Extract the actual stock data using a more robust unwrapping approach
+        let stockData = null;
 
-          setStockData(apiResponse.data.data);
-        } else if (
-          apiResponse.success &&
-          apiResponse.data &&
-          !apiResponse.data.data
-        ) {
-          console.error(
-            "API success true, outer data object (apiResponse.data) present, but inner data payload (apiResponse.data.data) is missing:",
-            apiResponse.data
-          );
-          throw new Error(
-            "Received success from API but the crucial inner data payload is missing."
-          );
-        } else if (apiResponse.success && !apiResponse.data) {
-          console.error(
-            "API success true, but outer data object (apiResponse.data) is missing:",
-            apiResponse
-          );
-          throw new Error("Received success from API but no data payload.");
+        if ((apiResponse.success || apiResponse?.data.success) && apiResponse.data) {
+          // Start with the data from the API response
+          stockData = apiResponse.data;
+          
+          // If it's still wrapped, unwrap it (handle nested data structures)
+          while (stockData && typeof stockData === 'object' && stockData.data) {
+            console.log("Unwrapping nested data structure:", stockData);
+            stockData = stockData.data;
+          }
+          
+          // Validate that we have actual stock data
+          if (!stockData || typeof stockData !== 'object') {
+            throw new Error("Invalid stock data structure received from API");
+          }
+          
         } else {
-          throw new Error(
-            apiResponse.message || `Could not retrieve data for ${symbol}`
-          );
+          throw new Error("API response missing success flag or data");
         }
+
+        // Cache the data
+        setCachedData(symbol, "details", stockData);
+        setStockData(stockData);
+        
       } catch (err) {
         console.error("Error fetching stock details:", err);
-        setError(err.message);
+        setError(err.message || "Failed to fetch stock details");
       } finally {
         setIsLoading(false);
       }
@@ -167,10 +156,11 @@ export default function StockDetails() {
         throw new Error("Failed to fetch filing details");
       }
       const data = await response.json();
+      
       if (data.success) {
         // Cache the filing data
-        setCachedData(url, "filing", data.data);
-        setFilingDetails(data.data);
+        setCachedData(url, "filing", data);
+        setFilingDetails(data);
       } else {
         throw new Error(data.message || "Could not retrieve filing details");
       }
