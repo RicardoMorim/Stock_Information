@@ -35,7 +35,7 @@ export default function PortfolioAIInsights() {
       const headers = {
         'Content-Type': 'application/json',
       };
-      
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -56,7 +56,7 @@ export default function PortfolioAIInsights() {
 
       while (true) {
         const { done, value } = await reader.read();
-        
+
         if (done) {
           setIsAnalyzing(false);
           break;
@@ -69,14 +69,14 @@ export default function PortfolioAIInsights() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              
+
               // Handle regular content chunks
               if (data.chunk !== undefined) {
                 setAnalysis(prev => prev + data.chunk);
                 if (data.model && data.provider) {
                   setModelInfo({ model: data.model, provider: data.provider });
                 }
-              } 
+              }
               // Handle error chunks
               else if (data.error) {
                 setError(data.error);
@@ -121,7 +121,7 @@ export default function PortfolioAIInsights() {
             </span>
           )}
         </div>
-        
+
         <div className="flex items-center space-x-2">
           {!isAnalyzing && analysis && (
             <>
@@ -146,7 +146,7 @@ export default function PortfolioAIInsights() {
       {/* Description */}
       {!analysis && !error && (
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Get comprehensive AI-powered portfolio analysis including diversification assessment, 
+          Get comprehensive AI-powered portfolio analysis including diversification assessment,
           risk analysis, rebalancing recommendations, and personalized investment advice.
         </p>
       )}
@@ -194,16 +194,15 @@ export default function PortfolioAIInsights() {
       {analysis && (
         <div
           ref={analysisRef}
-          className={`prose prose-sm dark:prose-invert max-w-none overflow-y-auto transition-all duration-300 ${
-            isExpanded ? 'max-h-[800px]' : 'max-h-[400px]'
-          }`}
+          className={`prose prose-sm dark:prose-invert max-w-none overflow-y-auto transition-all duration-300 ${isExpanded ? 'max-h-[800px]' : 'max-h-[400px]'
+            }`}
         >
           <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-gray-900 dark:to-gray-800 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
             <div
               className="markdown-content text-gray-900 dark:text-gray-100"
               dangerouslySetInnerHTML={{ __html: formatMarkdown(analysis) }}
             />
-            
+
             {isAnalyzing && (
               <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1"></span>
             )}
@@ -237,7 +236,7 @@ export default function PortfolioAIInsights() {
       {!analysis && !error && (
         <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">
-            💡 What you'll get:
+            💡 What you&apos;ll get:
           </h4>
           <ul className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
             <li>• Diversification and sector allocation analysis</li>
