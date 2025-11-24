@@ -29,22 +29,27 @@ export async function fetchAlphaVantageStockData(symbol) {
     let quoteData = null;
     if (quoteResponse.ok) {
         const rawQuoteData = await quoteResponse.json();
-        if (rawQuoteData["Global Quote"]) {
+        if (rawQuoteData["Global Quote"] && rawQuoteData["Global Quote"]["05. price"]) {
+            const gq = rawQuoteData["Global Quote"];
             quoteData = {
-                price: parseFloat(rawQuoteData["Global Quote"]["05. price"]),
-                change: parseFloat(rawQuoteData["Global Quote"]["09. change"]),
-                changePercent: parseFloat(rawQuoteData["Global Quote"]["10. change percent"].replace('%','')),
-                previousClose: parseFloat(rawQuoteData["Global Quote"]["08. previous close"]),
-                open: parseFloat(rawQuoteData["Global Quote"]["02. open"]),
-                high: parseFloat(rawQuoteData["Global Quote"]["03. high"]),
-                low: parseFloat(rawQuoteData["Global Quote"]["04. low"]),
-                volume: parseInt(rawQuoteData["Global Quote"]["06. volume"], 10),
-                latestTradingDay: rawQuoteData["Global Quote"]["07. latest trading day"],
+                price: parseFloat(gq["05. price"]) || null,
+                change: parseFloat(gq["09. change"]) || null,
+                changePercent: gq["10. change percent"] 
+                    ? parseFloat(gq["10. change percent"].replace('%', '')) 
+                    : null,
+                previousClose: parseFloat(gq["08. previous close"]) || null,
+                open: parseFloat(gq["02. open"]) || null,
+                high: parseFloat(gq["03. high"]) || null,
+                low: parseFloat(gq["04. low"]) || null,
+                volume: parseInt(gq["06. volume"], 10) || null,
+                latestTradingDay: gq["07. latest trading day"] || null,
                 source: 'Alpha Vantage',
                 isDelayed: true
             };
         } else if (rawQuoteData.Note) {
             console.warn(`Alpha Vantage API limit reached or other note for quote: ${rawQuoteData.Note}`);
+        } else {
+            console.warn(`Alpha Vantage returned empty or invalid Global Quote for ${symbol}`);
         }
     }
 

@@ -30,7 +30,17 @@ export default function PortfolioAIInsights() {
     setModelInfo(null);
 
     try {
-      const response = await fetch('/api/ai/analyze-portfolio');
+      // Get authentication token from localStorage
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/ai/analyze-portfolio', { headers });
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -48,6 +58,7 @@ export default function PortfolioAIInsights() {
         const { done, value } = await reader.read();
         
         if (done) {
+          setIsAnalyzing(false);
           break;
         }
 
@@ -56,25 +67,30 @@ export default function PortfolioAIInsights() {
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-
-            if (data.type === 'chunk') {
-              setAnalysis(prev => prev + data.content);
-              if (data.model && data.provider) {
-                setModelInfo({ model: data.model, provider: data.provider });
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              // Handle regular content chunks
+              if (data.chunk !== undefined) {
+                setAnalysis(prev => prev + data.chunk);
+                if (data.model && data.provider) {
+                  setModelInfo({ model: data.model, provider: data.provider });
+                }
+              } 
+              // Handle error chunks
+              else if (data.error) {
+                setError(data.error);
+                setIsAnalyzing(false);
               }
-            } else if (data.type === 'done') {
-              setIsAnalyzing(false);
-            } else if (data.type === 'error') {
-              setError(data.error);
-              setIsAnalyzing(false);
+            } catch (parseError) {
+              console.error('Error parsing stream data:', parseError);
             }
           }
         }
       }
     } catch (err) {
       console.error('Portfolio analysis error:', err);
-      setError(err.message);
+      setError(err.message || 'An error occurred during analysis');
       setIsAnalyzing(false);
     }
   };

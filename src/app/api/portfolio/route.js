@@ -5,7 +5,7 @@ import { getUserIdFromToken } from '@/app/utils/serverAuthUtils'; // Refactored
 import { fetchStockPrices, getExchangeRates } from '@/app/utils/portfolioUtils'; // Refactored
 
 // Helper function to calculate portfolio summary
-function calculatePortfolioSummary(aggregatedHoldings) {
+export function calculatePortfolioSummary(aggregatedHoldings) {
     let globalTotalInvestmentInEUR = 0;
     let globalCurrentTotalValueInEUR = 0;
 
@@ -26,7 +26,7 @@ function calculatePortfolioSummary(aggregatedHoldings) {
 }
 
 // Helper function to aggregate holdings from portfolio data
-function aggregatePortfolioHoldings(portfolio) {
+export function aggregatePortfolioHoldings(portfolio) {
     const holdingsBySymbol = {};
     portfolio.holdings.forEach(holding => {
         const symbol = holding.symbol;
@@ -50,7 +50,7 @@ function aggregatePortfolioHoldings(portfolio) {
 }
 
 // Helper function to process holdings with current prices and exchange rates
-function processHoldingsWithMarketData(holdingsBySymbol, prices, exchangeRates) {
+export function processHoldingsWithMarketData(holdingsBySymbol, prices, exchangeRates) {
     const symbols = Object.keys(holdingsBySymbol);
     return symbols.map(symbolKey => {
         const holdingAgg = holdingsBySymbol[symbolKey];

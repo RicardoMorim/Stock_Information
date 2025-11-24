@@ -27,22 +27,9 @@ const openRouterClient = new OpenAI({
 
 /**
  * Model Configuration with Fallback Chain
- * Order: NVIDIA (Primary) -> OpenRouter (Secondary, Free Tier)
  * Each NVIDIA model has unique API requirements
  */
 const MODEL_CHAIN = [
-  // NVIDIA Models (Primary) - Each with specific implementation
-  {
-    client: nvidiaClient,
-    model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-    provider: 'NVIDIA',
-    responseField: 'content',
-    maxTokens: 4096,
-    nvidiaModel: true,
-    modelType: 'llama', // Standard chat completions
-    temperature: 0.6,
-    topP: 0.95,
-  },
   {
     client: nvidiaClient,
     model: 'qwen/qwen3-235b-a22b',
@@ -76,7 +63,6 @@ const MODEL_CHAIN = [
     temperature: 1,
     topP: 1,
   },
-  // OpenRouter Models (Secondary - All Free Tier)
   {
     client: openRouterClient,
     model: 'x-ai/grok-4.1-fast:free',
@@ -84,6 +70,17 @@ const MODEL_CHAIN = [
     responseField: 'content',
     maxTokens: 8192,
     supportsReasoning: true,
+  },
+  {
+    client: nvidiaClient,
+    model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+    provider: 'NVIDIA',
+    responseField: 'content',
+    maxTokens: 4096,
+    nvidiaModel: true,
+    modelType: 'llama', // Standard chat completions
+    temperature: 0.6,
+    topP: 0.95,
   },
   {
     client: openRouterClient,
@@ -119,17 +116,17 @@ function extractResponseText(message, preferredField = 'content') {
   if (preferredField === 'reasoning_content' && message.reasoning_content) {
     return message.reasoning_content;
   }
-  
+
   // Fallback to content
   if (message.content) {
     return message.content;
   }
-  
+
   // Try reasoning_content if content not available
   if (message.reasoning_content) {
     return message.reasoning_content;
   }
-  
+
   return '';
 }
 
@@ -150,10 +147,10 @@ export async function callAI(messages, options = {}) {
   // Try each model in the fallback chain
   for (let i = 0; i < MODEL_CHAIN.length; i++) {
     const config = MODEL_CHAIN[i];
-    
+
     try {
       console.log(`[AI Service] Attempting model ${i + 1}/${MODEL_CHAIN.length}: ${config.model} (${config.provider})`);
-      
+
       let responseText = '';
 
       // Handle different NVIDIA model types
@@ -223,7 +220,7 @@ export async function callAI(messages, options = {}) {
     } catch (error) {
       console.error(`[AI Service] Failed with ${config.model} (${config.provider}):`, error.message);
       lastError = error;
-      
+
       // Continue to next model in chain
       if (i < MODEL_CHAIN.length - 1) {
         console.log(`[AI Service] Falling back to next model...`);
@@ -254,10 +251,10 @@ export async function* streamAI(messages, options = {}) {
   // Try each model in the fallback chain
   for (let i = 0; i < MODEL_CHAIN.length; i++) {
     const config = MODEL_CHAIN[i];
-    
+
     try {
       console.log(`[AI Service] Streaming with model ${i + 1}/${MODEL_CHAIN.length}: ${config.model} (${config.provider})`);
-      
+
       let stream;
 
       // Handle different NVIDIA model types
@@ -276,12 +273,12 @@ export async function* streamAI(messages, options = {}) {
         // OSS streams both reasoning_text and output_text
         for await (const chunk of stream) {
           let content = '';
-          
+
           // Collect reasoning text
           if (chunk.reasoning_text?.delta) {
             content += chunk.reasoning_text.delta;
           }
-          
+
           // Collect output text
           if (chunk.output_text?.delta) {
             content += chunk.output_text.delta;
@@ -330,7 +327,7 @@ export async function* streamAI(messages, options = {}) {
         for await (const chunk of stream) {
           const delta = chunk.choices[0]?.delta;
           let content = '';
-          
+
           // Qwen streams both reasoning_content and content
           if (config.modelType === 'qwen') {
             if (delta?.reasoning_content) {
@@ -342,7 +339,7 @@ export async function* streamAI(messages, options = {}) {
           } else {
             content = delta?.content || delta?.reasoning_content || '';
           }
-          
+
           if (content) {
             streamStarted = true;
             yield {
@@ -364,12 +361,12 @@ export async function* streamAI(messages, options = {}) {
     } catch (error) {
       console.error(`[AI Service] Streaming failed with ${config.model} (${config.provider}):`, error.message);
       lastError = error;
-      
+
       // If stream already started, we can't fallback
       if (streamStarted) {
         throw error;
       }
-      
+
       // Continue to next model in chain
       if (i < MODEL_CHAIN.length - 1) {
         console.log(`[AI Service] Falling back to next model for streaming...`);
@@ -410,7 +407,7 @@ Provide a thorough analysis covering technical indicators, fundamentals, news se
   ];
 
   const result = await callAI(messages, { systemPrompt, temperature: 0.3 });
-  
+
   return {
     analysis: result.text,
     model: result.model,
@@ -446,7 +443,7 @@ Provide detailed analysis of portfolio composition, risk exposure, performance, 
   ];
 
   const result = await callAI(messages, { systemPrompt, temperature: 0.3 });
-  
+
   return {
     analysis: result.text,
     model: result.model,
